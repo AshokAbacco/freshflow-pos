@@ -1,0 +1,196 @@
+// FreshFlow Grocery POS & ERP — database schema
+// Prisma ORM 7 (Rust-free client via @prisma/adapter-pg)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CASHIER
+  ADMIN
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+}
+
+enum TransactionStatus {
+  COMPLETED
+  VOIDED
+}
+
+enum StockMovementType {
+  SALE
+  VOID
+  RESTOCK
+  ADJUSTMENT
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  role         Role          @default(CASHIER)
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  transactions Transaction[]
+
+  @@map("users")
+}
+
+/// Two-level tree: top-level departments (parentId = null) and their sub-categories.
+model Category {
+  id        String            @id @default(uuid())
+  name      String
+  slug      String            @unique
+  icon      String?
+  sortOrder Int               @default(0) @map("sort_order")
+  parentId  String?           @map("parent_id")
+  parent    Category?         @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[]        @relation("CategoryTree")
+  products  Product[]
+  soldItems TransactionItem[]
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Product {
+  id                String            @id @default(uuid())
+  /// Short quick-action code typed at the register, e.g. "101"
+  code              String            @unique
+  barcode           String?           @unique
+  name              String
+  description       String?
+  categoryId        String            @map("category_id")
+  category          Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  price             Decimal           @db.Decimal(12, 2)
+  unit              String            @default("pcs")
+  soldByWeight      Boolean           @default(false) @map("sold_by_weight")
+  stock             Decimal           @default(0) @db.Decimal(14, 3)
+  lowStockThreshold Decimal           @default(5) @map("low_stock_threshold") @db.Decimal(14, 3)
+  /// Automatic markdown applied at the register (e.g. perishables near expiry)
+  discountPercent   Decimal           @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  /// Shown as a quick-code chip on the POS terminal
+  isQuickKey        Boolean           @default(false) @map("is_quick_key")
+  imageUrl          String?           @map("image_url")
+  isActive          Boolean           @default(true) @map("is_active")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  soldItems         TransactionItem[]
+  stockMovements    StockMovement[]
+
+  @@index([categoryId])
+  @@index([name])
+  @@map("products")
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  /// Generated on the terminal; makes offline sync idempotent
+  clientId       String            @unique @map("client_id")
+  invoiceNo      Int               @unique @default(autoincrement()) @map("invoice_no")
+  terminalId     String            @map("terminal_id")
+  cashierId      String            @map("cashier_id")
+  cashier        User              @relation(fields: [cashierId], references: [id], onDelete: Restrict)
+  /// User whose session uploaded the bill (differs from cashier for queued offline bills)
+  syncedById     String?           @map("synced_by_id")
+  status         TransactionStatus @default(COMPLETED)
+  paymentMethod  PaymentMethod     @map("payment_method")
+  customerPhone  String?           @map("customer_phone")
+  subtotal       Decimal           @db.Decimal(12, 2)
+  itemDiscount   Decimal           @map("item_discount") @db.Decimal(12, 2)
+  billDiscount   Decimal           @map("bill_discount") @db.Decimal(12, 2)
+  discountReason String?           @map("discount_reason")
+  taxRate        Decimal           @map("tax_rate") @db.Decimal(5, 2)
+  taxableAmount  Decimal           @map("taxable_amount") @db.Decimal(12, 2)
+  taxTotal       Decimal           @map("tax_total") @db.Decimal(12, 2)
+  grandTotal     Decimal           @map("grand_total") @db.Decimal(12, 2)
+  amountTendered Decimal?          @map("amount_tendered") @db.Decimal(12, 2)
+  changeDue      Decimal?          @map("change_due") @db.Decimal(12, 2)
+  wasOffline     Boolean           @default(false) @map("was_offline")
+  soldAt         DateTime          @map("sold_at")
+  syncedAt       DateTime          @default(now()) @map("synced_at")
+  voidedAt       DateTime?         @map("voided_at")
+  voidedById     String?           @map("voided_by_id")
+  voidReason     String?           @map("void_reason")
+  items          TransactionItem[]
+
+  @@index([soldAt])
+  @@index([cashierId, soldAt])
+  @@map("transactions")
+}
+
+model TransactionItem {
+  id                String      @id @default(uuid())
+  transactionId     String      @map("transaction_id")
+  transaction       Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  productId         String      @map("product_id")
+  product           Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// Snapshot of the product's category at sale time, so reports stay accurate after re-categorising
+  categoryId        String      @map("category_id")
+  category          Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  productName       String      @map("product_name")
+  productCode       String      @map("product_code")
+  unit              String
+  soldByWeight      Boolean     @map("sold_by_weight")
+  quantity          Decimal     @db.Decimal(14, 3)
+  unitPrice         Decimal     @map("unit_price") @db.Decimal(12, 2)
+  discountPercent   Decimal     @map("discount_percent") @db.Decimal(5, 2)
+  lineSubtotal      Decimal     @map("line_subtotal") @db.Decimal(12, 2)
+  lineDiscount      Decimal     @map("line_discount") @db.Decimal(12, 2)
+  /// Portion of the bill-level discount allocated to this line
+  billDiscountShare Decimal     @map("bill_discount_share") @db.Decimal(12, 2)
+  /// Taxable value of the line after all discounts
+  netAmount         Decimal     @map("net_amount") @db.Decimal(12, 2)
+
+  @@index([transactionId])
+  @@index([productId])
+  @@index([categoryId])
+  @@map("transaction_items")
+}
+
+model StockMovement {
+  id          String            @id @default(uuid())
+  productId   String            @map("product_id")
+  product     Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type        StockMovementType
+  /// Signed change in stock (negative for sales)
+  quantity    Decimal           @db.Decimal(14, 3)
+  reason      String?
+  referenceId String?           @map("reference_id")
+  userId      String?           @map("user_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@index([productId, createdAt])
+  @@map("stock_movements")
+}
+
+/// Single-row store profile (id is always 1)
+model StoreSetting {
+  id                    Int      @id @default(1)
+  storeName             String   @map("store_name")
+  tagline               String?
+  gstin                 String?
+  address               String?
+  phone                 String?
+  upiVpa                String?  @map("upi_vpa")
+  upiPayeeName          String?  @map("upi_payee_name")
+  currency              String   @default("INR")
+  taxRate               Decimal  @default(5) @map("tax_rate") @db.Decimal(5, 2)
+  maxCashierDiscountPct Decimal  @default(10) @map("max_cashier_discount_pct") @db.Decimal(5, 2)
+  receiptFooter         String?  @map("receipt_footer")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("store_settings")
+}

@@ -1,0 +1,15 @@
+{
+  "name": "freshflow-pos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FreshFlow — grocery POS terminal and back office",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix client install",
+    "db:deploy": "npm --prefix server run db:deploy",
+    "db:seed": "npm --prefix server run db:seed",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "test": "npm --prefix server test"
+  }
+}
