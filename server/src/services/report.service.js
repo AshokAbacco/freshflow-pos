@@ -15,6 +15,9 @@ function inPeriod(from, to, column = Prisma.sql`t.sold_at`) {
     AND ${column} < (((${to}::date) + 1)::timestamp AT TIME ZONE ${tz()}::text AT TIME ZONE 'UTC'))`;
 }
 
+/** Every reporting query is filtered to one organization. */
+const ofOrg = (organizationId, column = Prisma.sql`t.organization_id`) => Prisma.sql`${column} = ${organizationId}::text`;
+
 /** UTC instants for a local-date period, for use with the regular Prisma query builder. */
 export async function periodBounds(from, to) {
   const [row] = await prisma.$queryRaw`
@@ -23,7 +26,7 @@ export async function periodBounds(from, to) {
   return { start: new Date(row.start), end: new Date(row.end) };
 }
 
-async function kpis(from, to) {
+async function kpis(organizationId, from, to) {
   const [[totals], [volume]] = await Promise.all([
     prisma.$queryRaw`
       SELECT COUNT(*)::int AS orders,
@@ -32,25 +35,25 @@ async function kpis(from, to) {
              COALESCE(SUM(t.item_discount + t.bill_discount), 0)::float8 AS discounts,
              COALESCE(SUM(t.tax_total), 0)::float8 AS tax
       FROM transactions t
-      WHERE t.status = 'COMPLETED' AND ${inPeriod(from, to)}`,
+      WHERE ${ofOrg(organizationId)} AND t.status = 'COMPLETED' AND ${inPeriod(from, to)}`,
     prisma.$queryRaw`
       SELECT COALESCE(SUM(i.quantity) FILTER (WHERE NOT i.sold_by_weight), 0)::float8 AS units,
              COALESCE(SUM(i.quantity) FILTER (WHERE i.sold_by_weight), 0)::float8 AS "weightKg"
       FROM transaction_items i
       JOIN transactions t ON t.id = i.transaction_id
-      WHERE t.status = 'COMPLETED' AND ${inPeriod(from, to)}`,
+      WHERE ${ofOrg(organizationId)} AND t.status = 'COMPLETED' AND ${inPeriod(from, to)}`,
   ]);
   return { ...totals, ...volume, avgBasket: totals.orders ? totals.revenue / totals.orders : 0 };
 }
 
-async function series(from, to, granularity) {
+async function series(organizationId, from, to, granularity) {
   const rows = await prisma.$queryRaw`
     SELECT to_char(date_trunc(${granularity}::text, (t.sold_at AT TIME ZONE 'UTC') AT TIME ZONE ${tz()}::text),
                    'YYYY-MM-DD"T"HH24:00') AS bucket,
            SUM(t.grand_total)::float8 AS revenue,
            COUNT(*)::int AS orders
     FROM transactions t
-    WHERE t.status = 'COMPLETED' AND ${inPeriod(from, to)}
+    WHERE ${ofOrg(organizationId)} AND t.status = 'COMPLETED' AND ${inPeriod(from, to)}
     GROUP BY 1
     ORDER BY 1`;
   const byKey = new Map(rows.map((r) => [r.bucket, r]));
@@ -62,11 +65,11 @@ async function series(from, to, granularity) {
   }));
 }
 
-async function paymentSplit(from, to) {
+async function paymentSplit(organizationId, from, to) {
   const rows = await prisma.$queryRaw`
     SELECT t.payment_method::text AS method, COUNT(*)::int AS orders, SUM(t.grand_total)::float8 AS revenue
     FROM transactions t
-    WHERE t.status = 'COMPLETED' AND ${inPeriod(from, to)}
+    WHERE ${ofOrg(organizationId)} AND t.status = 'COMPLETED' AND ${inPeriod(from, to)}
     GROUP BY 1`;
   return ['UPI', 'CASH', 'CARD'].map((method) => {
     const row = rows.find((r) => r.method === method);
@@ -74,27 +77,27 @@ async function paymentSplit(from, to) {
   });
 }
 
-async function inventorySnapshot() {
+async function inventorySnapshot(organizationId) {
   const [row] = await prisma.$queryRaw`
     SELECT COALESCE(SUM(GREATEST(p.stock, 0) * p.price), 0)::float8 AS value,
            COUNT(*)::int AS skus,
            COUNT(*) FILTER (WHERE p.stock <= 0)::int AS "outOfStock",
            COUNT(*) FILTER (WHERE p.stock > 0 AND p.stock <= p.low_stock_threshold)::int AS "lowStock"
     FROM products p
-    WHERE p.is_active`;
+    WHERE p.organization_id = ${organizationId}::text AND p.is_active`;
   return row;
 }
 
-export async function overviewReport(from, to) {
+export async function overviewReport(organizationId, from, to) {
   const period = comparePeriods(from, to);
   const [current, previous, curSeries, prevSeries, curSplit, prevSplit, inventory] = await Promise.all([
-    kpis(period.from, period.to),
-    kpis(period.prevFrom, period.prevTo),
-    series(period.from, period.to, period.granularity),
-    series(period.prevFrom, period.prevTo, period.granularity),
-    paymentSplit(period.from, period.to),
-    paymentSplit(period.prevFrom, period.prevTo),
-    inventorySnapshot(),
+    kpis(organizationId, period.from, period.to),
+    kpis(organizationId, period.prevFrom, period.prevTo),
+    series(organizationId, period.from, period.to, period.granularity),
+    series(organizationId, period.prevFrom, period.prevTo, period.granularity),
+    paymentSplit(organizationId, period.from, period.to),
+    paymentSplit(organizationId, period.prevFrom, period.prevTo),
+    inventorySnapshot(organizationId),
   ]);
   return {
     period,
@@ -110,7 +113,7 @@ export async function overviewReport(from, to) {
  * Sales + stock per category for the period and the previous period. Returns every category
  * (built for 1,000+ rows); `level=top` rolls sub-categories into their department.
  */
-export async function categoryReport(from, to, level = 'leaf') {
+export async function categoryReport(organizationId, from, to, level = 'leaf') {
   const period = comparePeriods(from, to);
   const cur = inPeriod(period.from, period.to);
   const prev = inPeriod(period.prevFrom, period.prevTo);
@@ -141,7 +144,7 @@ export async function categoryReport(from, to, level = 'leaf') {
              COUNT(*) FILTER (WHERE p.stock <= p.low_stock_threshold)::int AS low_stock
       FROM products p
       JOIN categories c ON c.id = p.category_id
-      WHERE p.is_active
+      WHERE p.organization_id = ${organizationId}::text AND p.is_active
       GROUP BY 1
     )
     SELECT c.id, c.name, c.icon, pc.name AS "parentName",
@@ -157,7 +160,7 @@ export async function categoryReport(from, to, level = 'leaf') {
     LEFT JOIN categories pc ON pc.id = c.parent_id
     LEFT JOIN sales s ON s.category_id = c.id
     LEFT JOIN stock k ON k.category_id = c.id
-    WHERE ${levelFilter}
+    WHERE c.organization_id = ${organizationId}::text AND ${levelFilter}
     ORDER BY revenue DESC, c.name ASC`;
 
   const total = rows.reduce((sum, r) => sum + r.revenue, 0);
@@ -174,7 +177,7 @@ const PRODUCT_SORTS = {
 };
 
 /** Itemised sales performance with remaining stock, paginated server-side. */
-export async function productReport({ from, to, q = '', sort = 'revenue', page = 1, pageSize = 25 }) {
+export async function productReport(organizationId, { from, to, q = '', sort = 'revenue', page = 1, pageSize = 25 }) {
   const period = comparePeriods(from, to);
   const cur = inPeriod(period.from, period.to);
   const prev = inPeriod(period.prevFrom, period.prevTo);
@@ -190,7 +193,7 @@ export async function productReport({ from, to, q = '', sort = 'revenue', page =
              SUM(i.quantity) FILTER (WHERE ${cur}) AS cur_qty
       FROM transaction_items i
       JOIN transactions t ON t.id = i.transaction_id
-      WHERE t.status = 'COMPLETED' AND (${cur} OR ${prev})
+      WHERE ${ofOrg(organizationId)} AND t.status = 'COMPLETED' AND (${cur} OR ${prev})
       GROUP BY 1
     )
     SELECT p.id, p.code, p.name, p.unit, p.sold_by_weight AS "soldByWeight",
@@ -204,7 +207,8 @@ export async function productReport({ from, to, q = '', sort = 'revenue', page =
     FROM products p
     JOIN categories c ON c.id = p.category_id
     LEFT JOIN sales s ON s.product_id = p.id
-    WHERE (p.is_active OR s.product_id IS NOT NULL)
+    WHERE p.organization_id = ${organizationId}::text
+      AND (p.is_active OR s.product_id IS NOT NULL)
       AND (${search}::text = '' OR p.name ILIKE ${`%${search}%`}::text OR p.code = ${search}::text OR p.barcode = ${search}::text)
     ORDER BY ${orderBy}
     LIMIT ${pageSize}::int OFFSET ${offset}::int`;

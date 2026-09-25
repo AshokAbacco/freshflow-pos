@@ -3,7 +3,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authorize, invalidateUserCache, ROLES } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
 import { validate } from '../middleware/validate.js';
+import { assertSeatsAvailable } from '../services/billing.service.js';
 import { asyncHandler, HttpError } from '../utils/http.js';
 import { publicUser } from '../utils/serialize.js';
 import { idParam } from './schemas.js';
@@ -29,18 +31,25 @@ const updateSchema = z.object({
 
 router.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const users = await prisma.user.findMany({ orderBy: [{ role: 'desc' }, { name: 'asc' }] });
+  asyncHandler(async (req, res) => {
+    const users = await prisma.user.findMany({
+      where: { organizationId: req.user.organizationId },
+      orderBy: [{ role: 'desc' }, { name: 'asc' }],
+    });
     res.json({ users: users.map(publicUser) });
   }),
 );
 
 router.post(
   '/',
+  requireActiveSubscription,
   validate({ body: createSchema }),
   asyncHandler(async (req, res) => {
     const { password: plain, ...data } = req.body;
-    const user = await prisma.user.create({ data: { ...data, passwordHash: await bcrypt.hash(plain, 12) } });
+    await assertSeatsAvailable(req.user.organizationId, 1);
+    const user = await prisma.user.create({
+      data: { ...data, organizationId: req.user.organizationId, passwordHash: await bcrypt.hash(plain, 12) },
+    });
     res.status(201).json({ user: publicUser(user) });
   }),
 );
@@ -53,6 +62,13 @@ router.patch(
     if (req.params.id === req.user.id && (data.isActive === false || data.role === 'CASHIER')) {
       throw new HttpError(400, 'You cannot deactivate or demote your own account');
     }
+    const target = await prisma.user.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
+      select: { id: true, isActive: true },
+    });
+    if (!target) throw new HttpError(404, 'Team member not found');
+    // Reactivating someone takes a seat, so check the plan covers it.
+    if (data.isActive === true && !target.isActive) await assertSeatsAvailable(req.user.organizationId, 1);
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: { ...data, ...(plain ? { passwordHash: await bcrypt.hash(plain, 12) } : {}) },

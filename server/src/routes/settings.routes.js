@@ -37,8 +37,8 @@ const settingsSchema = z.object({
 router.get(
   '/',
   authorize(ROLES.ADMIN, ROLES.CASHIER),
-  asyncHandler(async (_req, res) => {
-    res.json({ settings: serializeSettings(await getSettings()) });
+  asyncHandler(async (req, res) => {
+    res.json({ settings: serializeSettings(await getSettings(req.user.organizationId)) });
   }),
 );
 
@@ -47,7 +47,7 @@ router.put(
   authorize(ROLES.ADMIN),
   validate({ body: settingsSchema }),
   asyncHandler(async (req, res) => {
-    res.json({ settings: serializeSettings(await updateSettings(req.body)) });
+    res.json({ settings: serializeSettings(await updateSettings(req.user.organizationId, req.body)) });
   }),
 );
 

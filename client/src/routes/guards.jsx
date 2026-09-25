@@ -25,7 +25,7 @@ export function RequireRole({ roles }) {
           <p className="mt-2 text-desc text-slate-500">
             Reports, analytics, inventory and settings need an admin account. You can keep selling from the register.
           </p>
-          <Link to="/" className="mt-5 inline-flex h-10 items-center rounded-full bg-brand px-5 font-semibold text-white hover:bg-brand-700">
+          <Link to="/app" className="mt-5 inline-flex h-10 items-center rounded-full bg-brand px-5 font-semibold text-white hover:bg-brand-700">
             Back to register
           </Link>
         </div>

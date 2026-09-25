@@ -9,7 +9,7 @@ const ISSUER = 'freshflow-pos';
 const AUDIENCE = 'freshflow-pos-client';
 
 export function signToken(user) {
-  return jwt.sign({ role: user.role, name: user.name }, env.jwtSecret, {
+  return jwt.sign({ role: user.role, name: user.name, org: user.organizationId }, env.jwtSecret, {
     subject: user.id,
     issuer: ISSUER,
     audience: AUDIENCE,
@@ -35,7 +35,14 @@ async function loadAccount(userId) {
   if (hit && hit.expires > Date.now()) return hit.account;
   const account = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, role: true, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      isActive: true,
+      organizationId: true,
+      organization: { select: { id: true, name: true, slug: true, subscription: true } },
+    },
   });
   userCache.set(userId, { account, expires: Date.now() + USER_CACHE_TTL_MS });
   return account;
@@ -67,7 +74,17 @@ export async function authenticate(req, _res, next) {
     if (account.role !== claims.role) {
       return next(new HttpError(401, 'Your role has changed. Sign in again.', 'ROLE_CHANGED'));
     }
-    req.user = { id: account.id, name: account.name, role: account.role };
+    if (claims.org && claims.org !== account.organizationId) {
+      return next(new HttpError(401, 'Your session is not valid. Sign in again.', 'UNAUTHENTICATED'));
+    }
+    req.user = {
+      id: account.id,
+      name: account.name,
+      role: account.role,
+      organizationId: account.organizationId,
+    };
+    req.organization = account.organization;
+    req.subscription = account.organization?.subscription ?? null;
     return next();
   } catch (err) {
     return next(err);

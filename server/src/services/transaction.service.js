@@ -53,6 +53,7 @@ function isUniqueViolation(err) {
  * revenue or stock. Returns { status: 'created' | 'duplicate' | 'rejected' }.
  */
 export async function ingestTransaction(rawInput, actor, settings) {
+  const organizationId = actor.organizationId;
   const parsed = syncTransactionSchema.safeParse(rawInput);
   const clientId = typeof rawInput?.clientId === 'string' ? rawInput.clientId : null;
   if (!parsed.success) {
@@ -63,13 +64,16 @@ export async function ingestTransaction(rawInput, actor, settings) {
 
   const existing = await prisma.transaction.findUnique({
     where: { clientId: input.clientId },
-    select: { id: true, invoiceNo: true },
+    select: { id: true, invoiceNo: true, organizationId: true },
   });
+  if (existing && existing.organizationId !== organizationId) {
+    return rejected(input.clientId, 'NOT_YOURS', 'That bill belongs to another store');
+  }
   if (existing) return { clientId: input.clientId, status: 'duplicate', id: existing.id, invoiceNo: existing.invoiceNo };
 
   const productIds = [...new Set(input.items.map((i) => i.productId))];
   const products = await prisma.product.findMany({
-    where: { id: { in: productIds } },
+    where: { id: { in: productIds }, organizationId },
     select: { id: true, code: true, name: true, unit: true, soldByWeight: true, categoryId: true },
   });
   const byId = new Map(products.map((p) => [p.id, p]));
@@ -115,7 +119,10 @@ export async function ingestTransaction(rawInput, actor, settings) {
   // Bills queued offline may be uploaded by whoever signs in next; keep the original cashier when valid.
   let cashierId = actor.id;
   if (input.cashierId && input.cashierId !== actor.id) {
-    const original = await prisma.user.findUnique({ where: { id: input.cashierId }, select: { id: true } });
+    const original = await prisma.user.findFirst({
+      where: { id: input.cashierId, organizationId },
+      select: { id: true },
+    });
     if (original) cashierId = original.id;
   }
 
@@ -125,8 +132,18 @@ export async function ingestTransaction(rawInput, actor, settings) {
 
   try {
     const created = await prisma.$transaction(async (db) => {
+      // Invoice numbers run 1, 2, 3… within each store. The row lock from this update also
+      // serialises concurrent bills on the same store, so two tills cannot take the same number.
+      const [counter] = await db.$queryRaw`
+        UPDATE organizations SET invoice_seq = invoice_seq + 1
+        WHERE id = ${organizationId}::text
+        RETURNING invoice_seq AS "invoiceNo"`;
+      if (!counter) throw new Error('Organization not found while numbering the invoice');
+
       const tx = await db.transaction.create({
         data: {
+          organizationId,
+          invoiceNo: counter.invoiceNo,
           clientId: input.clientId,
           terminalId: input.terminalId,
           cashierId,
@@ -178,6 +195,7 @@ export async function ingestTransaction(rawInput, actor, settings) {
 
       await db.stockMovement.createMany({
         data: [...soldQty].map(([productId, quantity]) => ({
+          organizationId,
           productId,
           type: 'SALE',
           quantity: qty(-quantity),
@@ -204,7 +222,10 @@ export async function ingestTransaction(rawInput, actor, settings) {
 /** Void a completed bill and return its items to stock. */
 export async function voidTransaction(id, reason, actor) {
   return prisma.$transaction(async (db) => {
-    const tx = await db.transaction.findUnique({ where: { id }, include: { items: true } });
+    const tx = await db.transaction.findFirst({
+      where: { id, organizationId: actor.organizationId },
+      include: { items: true },
+    });
     if (!tx) return { error: 'NOT_FOUND' };
     if (tx.status === 'VOIDED') return { error: 'ALREADY_VOIDED' };
 
@@ -216,6 +237,7 @@ export async function voidTransaction(id, reason, actor) {
     }
     await db.stockMovement.createMany({
       data: [...restock].map(([productId, quantity]) => ({
+        organizationId: actor.organizationId,
         productId,
         type: 'VOID',
         quantity: qty(quantity),

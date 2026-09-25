@@ -21,7 +21,7 @@ router.post(
   authorize(ROLES.CASHIER, ROLES.ADMIN),
   validate({ body: z.object({ transactions: z.array(z.unknown()).min(1).max(50) }) }),
   asyncHandler(async (req, res) => {
-    const settings = await getSettings();
+    const settings = await getSettings(req.user.organizationId);
     const results = [];
     for (const tx of req.body.transactions) {
       results.push(await ingestTransaction(tx, req.user, settings));
@@ -54,6 +54,7 @@ router.get(
     const invoiceNo = /^\d{1,9}$/.test(q.replace(/^#|^INV-?/i, '')) ? Number(q.replace(/^#|^INV-?/i, '')) : null;
 
     const where = {
+      organizationId: req.user.organizationId,
       soldAt: { gte: start, lt: end },
       ...(method !== 'ALL' ? { paymentMethod: method } : {}),
       ...(status !== 'ALL' ? { status } : {}),
@@ -79,8 +80,8 @@ router.get(
   authorize(ROLES.ADMIN),
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
-    const tx = await prisma.transaction.findUnique({
-      where: { id: req.params.id },
+    const tx = await prisma.transaction.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
       include: { items: { orderBy: { productName: 'asc' } }, cashier: { select: { id: true, name: true } } },
     });
     if (!tx) throw notFound('Transaction');

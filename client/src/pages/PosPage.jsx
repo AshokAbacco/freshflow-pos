@@ -217,16 +217,18 @@ export default function PosPage() {
   const totalDue = fromPaise(bill.grandTotal);
 
   return (
-    <div className="flex h-full min-h-0 bg-[#F9FCF9] text-gray-800 font-sans selection:bg-green-200">
-      <section className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        {/* Glassmorphism Header */}
-        <header className="sticky top-0 z-20 border-b border-green-100/60 bg-white/70 px-4 pb-4 pt-5 backdrop-blur-xl sm:px-6 shadow-sm">
-          <div className="flex items-center gap-4">
+    <div className="flex h-full min-h-0">
+      <section className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 border-b border-black/5 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl sm:px-6">
+          <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-xl font-bold tracking-tight text-gray-900">
+              <p className="font-serif text-desc font-semibold italic text-[#FF7B29]">
+                Register
+              </p>
+              <h1 className="truncate text-h1 font-extrabold tracking-tight text-gray-900">
                 {settings?.storeName || "Register"}
               </h1>
-              <p className="truncate text-sm font-medium text-gray-500">
+              <p className="truncate text-desc text-slate-500">
                 {user?.name}
                 {source === "cache" ? " · offline catalog" : ""}
               </p>
@@ -236,28 +238,27 @@ export default function PosPage() {
               variant="secondary"
               size="sm"
               onClick={() => setShowHeld(true)}
-              className="relative bg-white border-green-100 text-green-800 hover:bg-green-50 hover:border-green-200 transition-all shadow-sm"
+              className="relative"
             >
-              <LuLayers aria-hidden className="text-green-700" />
-              <span className="hidden sm:inline font-medium">Held</span>
+              <LuLayers aria-hidden />
+              <span className="hidden sm:inline">Held</span>
               {heldBills.length ? (
-                <span className="ml-1 rounded-full bg-green-600 px-2 text-xs font-bold text-white tabular-nums shadow-sm">
+                <span className="ml-0.5 rounded-full bg-[#FF7B29] px-1.5 text-desc font-semibold text-white tabular">
                   {heldBills.length}
                 </span>
               ) : null}
             </Button>
           </div>
 
-          {/* Search Bar matching the modern rounded aesthetic */}
-          <div className="relative mt-4">
+          <div className="relative mt-3">
             <LuSearch
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-green-700 w-5 h-5"
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
               aria-hidden
             />
             <input
               ref={searchRef}
-              className="w-full h-12 pl-12 pr-12 rounded-full bg-white border border-green-100 shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent transition-all"
-              placeholder="Scan barcode or search fresh products..."
+              className="field h-11 pl-10 pr-10"
+              placeholder="Scan barcode or search products"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onSearchKeyDown}
@@ -268,23 +269,22 @@ export default function PosPage() {
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-gray-400 hover:bg-green-50 hover:text-green-700 transition-colors"
+                className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100"
                 aria-label="Clear search"
               >
-                <LuX aria-hidden className="w-5 h-5" />
+                <LuX aria-hidden />
               </button>
             ) : (
               <LuScanBarcode
-                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-green-300 w-5 h-5"
+                className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300"
                 aria-hidden
               />
             )}
           </div>
 
-          {/* Quick Keys formatted as minimalist pills */}
           {quickKeys.length ? (
             <div
-              className="no-scrollbar -mx-4 mt-4 flex gap-2.5 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
+              className="no-scrollbar -mx-4 mt-2.5 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
               aria-label="Quick codes"
             >
               {quickKeys.map((p) => (
@@ -292,9 +292,9 @@ export default function PosPage() {
                   key={p.id}
                   type="button"
                   onClick={() => select(p)}
-                  className="flex items-center h-9 shrink-0 rounded-full bg-white px-4 text-sm font-medium text-gray-700 border border-green-100 shadow-sm transition-all hover:border-green-300 hover:bg-green-50 hover:text-green-900"
+                  className="h-8 shrink-0 rounded-full bg-white px-3 text-desc font-medium text-slate-700 ring-1 ring-slate-200 transition hover:ring-brand/50"
                 >
-                  <span className="text-green-600/70 mr-1.5 text-xs tabular-nums font-semibold">
+                  <span className="font-semibold text-[#FF7B29] tabular">
                     #{p.code}
                   </span>{" "}
                   {p.name.split(" ").slice(0, 2).join(" ")}
@@ -305,23 +305,21 @@ export default function PosPage() {
         </header>
 
         <div
-          className={`scroll-thin min-h-0 flex-1 overflow-y-auto px-4 pt-6 sm:px-6 ${lines.length ? "pb-24 lg:pb-6" : "pb-6"}`}
+          className={`scroll-thin min-h-0 flex-1 overflow-y-auto px-4 pt-4 sm:px-6 ${lines.length ? "pb-24 lg:pb-4" : "pb-4"}`}
         >
-          <div className="mb-6">
-            <CategoryRail
-              categories={categories}
-              selected={category}
-              onSelect={(id) => {
-                setCategory(id);
-                setSubCategory("all");
-              }}
-              selectedSub={subCategory}
-              onSelectSub={setSubCategory}
-            />
-          </div>
+          <CategoryRail
+            categories={categories}
+            selected={category}
+            onSelect={(id) => {
+              setCategory(id);
+              setSubCategory("all");
+            }}
+            selectedSub={subCategory}
+            onSelectSub={setSubCategory}
+          />
 
           {visibleProducts.length ? (
-            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
               {visibleProducts.map((p) => (
                 <ProductCard
                   key={p.id}
@@ -333,35 +331,32 @@ export default function PosPage() {
               ))}
             </div>
           ) : (
-            <div className="mt-12">
-              <EmptyState
-                icon={LuSearch}
-                title="Nothing matches that"
-                description={
-                  query
-                    ? `No fresh products found for “${query}”.`
-                    : "This category is empty."
-                }
-                action={
-                  query ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setQuery("")}
-                      className="bg-white border-green-200 text-green-800 hover:bg-green-50"
-                    >
-                      Clear search
-                    </Button>
-                  ) : null
-                }
-              />
-            </div>
+            <EmptyState
+              icon={LuSearch}
+              title="Nothing matches that"
+              description={
+                query
+                  ? `No products found for “${query}”.`
+                  : "This category has no products yet."
+              }
+              action={
+                query ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setQuery("")}
+                  >
+                    Clear search
+                  </Button>
+                ) : null
+              }
+            />
           )}
         </div>
       </section>
 
-      {/* Right Sidebar Cart Panel */}
-      <aside className="hidden w-[380px] shrink-0 border-l border-green-100/80 bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.02)] lg:flex xl:w-[420px]">
+      {/* Bill panel: docked on large screens, bottom sheet on phones and tablets */}
+      <aside className="hidden w-[380px] shrink-0 border-l border-slate-200/80 bg-white lg:flex xl:w-[420px]">
         <CartPanel
           onCheckout={() => setShowPayment(true)}
           onHold={() => holdCurrent().then(() => toast.info("Bill parked"))}
@@ -369,22 +364,21 @@ export default function PosPage() {
         />
       </aside>
 
-      {/* Mobile Sticky Cart Button */}
       {lines.length ? (
-        <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-30 px-4 pb-4 md:bottom-0 md:px-6 md:pb-6 lg:hidden">
+        <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-30 px-4 pb-3 md:bottom-0 md:px-6 md:pb-4 lg:hidden">
           <button
             type="button"
             onClick={() => setShowCart(true)}
             aria-label="Open current bill"
-            className="flex h-16 w-full items-center gap-4 rounded-2xl bg-green-800 px-6 text-white shadow-[0_8px_30px_rgba(22,101,52,0.3)] transition-transform active:scale-[0.98]"
+            className="flex h-14 w-full items-center gap-3 rounded-full bg-[#111] px-5 text-white shadow-lift"
           >
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-white/20 backdrop-blur-sm">
-              <LuShoppingBasket aria-hidden className="w-5 h-5" />
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-brand">
+              <LuShoppingBasket aria-hidden />
             </span>
-            <span className="flex-1 text-left font-medium text-green-50">
+            <span className="flex-1 text-left font-semibold">
               {itemCount} item{itemCount === 1 ? "" : "s"}
             </span>
-            <span className="text-xl font-bold tracking-tight tabular-nums">
+            <span className="text-h2 font-extrabold text-[#FF7B29] tabular">
               {formatMoney(totalDue, currency)}
             </span>
           </button>

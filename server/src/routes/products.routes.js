@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authorize, ROLES } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler, HttpError, notFound } from '../utils/http.js';
 import { roundQty } from '../utils/pricing.js';
@@ -53,8 +54,11 @@ const SORTS = {
   updated: { updatedAt: 'desc' },
 };
 
-async function assertLeafCategory(categoryId) {
-  const category = await prisma.category.findUnique({ where: { id: categoryId }, include: { _count: { select: { children: true } } } });
+async function assertLeafCategory(organizationId, categoryId) {
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, organizationId },
+    include: { _count: { select: { children: true } } },
+  });
   if (!category) throw new HttpError(400, 'Category not found');
   if (category._count.children) throw new HttpError(400, `"${category.name}" has sub-categories. Choose one of them.`);
 }
@@ -63,9 +67,9 @@ async function assertLeafCategory(categoryId) {
 router.get(
   '/catalog',
   authorize(ROLES.ADMIN, ROLES.CASHIER),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const products = await prisma.product.findMany({
-      where: { isActive: true },
+      where: { organizationId: req.user.organizationId, isActive: true },
       orderBy: { name: 'asc' },
       select: {
         id: true, code: true, barcode: true, name: true, categoryId: true, price: true, unit: true,
@@ -83,6 +87,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { page, pageSize, q, categoryId, stock, status, sort } = req.query;
     const where = {
+      organizationId: req.user.organizationId,
       ...(status === 'all' ? {} : { isActive: status === 'active' }),
       ...(categoryId ? { categoryId } : {}),
       ...(q
@@ -108,15 +113,24 @@ router.get(
 router.post(
   '/',
   authorize(ROLES.ADMIN),
+  requireActiveSubscription,
   validate({ body: createSchema }),
   asyncHandler(async (req, res) => {
-    await assertLeafCategory(req.body.categoryId);
+    const organizationId = req.user.organizationId;
+    await assertLeafCategory(organizationId, req.body.categoryId);
     const { stock, ...data } = req.body;
     const product = await prisma.$transaction(async (db) => {
-      const created = await db.product.create({ data: { ...data, stock: roundQty(stock).toFixed(3) } });
+      const created = await db.product.create({ data: { ...data, organizationId, stock: roundQty(stock).toFixed(3) } });
       if (stock > 0) {
         await db.stockMovement.create({
-          data: { productId: created.id, type: 'RESTOCK', quantity: roundQty(stock).toFixed(3), reason: 'Opening stock', userId: req.user.id },
+          data: {
+            organizationId,
+            productId: created.id,
+            type: 'RESTOCK',
+            quantity: roundQty(stock).toFixed(3),
+            reason: 'Opening stock',
+            userId: req.user.id,
+          },
         });
       }
       return db.product.findUnique({ where: { id: created.id }, include: { category: { select: { name: true } } } });
@@ -128,11 +142,15 @@ router.post(
 router.put(
   '/:id',
   authorize(ROLES.ADMIN),
+  requireActiveSubscription,
   validate({ params: idParam, body: productSchema }),
   asyncHandler(async (req, res) => {
-    const exists = await prisma.product.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    const exists = await prisma.product.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
+      select: { id: true },
+    });
     if (!exists) throw notFound('Product');
-    await assertLeafCategory(req.body.categoryId);
+    await assertLeafCategory(req.user.organizationId, req.body.categoryId);
     const product = await prisma.product.update({
       where: { id: req.params.id },
       data: req.body,
@@ -146,11 +164,15 @@ router.put(
 router.patch(
   '/:id/stock',
   authorize(ROLES.ADMIN),
+  requireActiveSubscription,
   validate({ params: idParam, body: stockSchema }),
   asyncHandler(async (req, res) => {
     const { mode, quantity, reason } = req.body;
     const product = await prisma.$transaction(async (db) => {
-      const [locked] = await db.$queryRaw`SELECT stock::float8 AS stock FROM products WHERE id = ${req.params.id}::text FOR UPDATE`;
+      const [locked] = await db.$queryRaw`
+        SELECT stock::float8 AS stock FROM products
+        WHERE id = ${req.params.id}::text AND organization_id = ${req.user.organizationId}::text
+        FOR UPDATE`;
       if (!locked) throw notFound('Product');
       const current = roundQty(locked.stock);
       const next = mode === 'SET' ? roundQty(quantity) : mode === 'ADD' ? roundQty(current + quantity) : roundQty(current - quantity);
@@ -160,6 +182,7 @@ router.patch(
       await db.product.update({ where: { id: req.params.id }, data: { stock: next.toFixed(3) } });
       await db.stockMovement.create({
         data: {
+          organizationId: req.user.organizationId,
           productId: req.params.id,
           type: mode === 'ADD' ? 'RESTOCK' : 'ADJUSTMENT',
           quantity: change.toFixed(3),
@@ -179,7 +202,7 @@ router.get(
   validate({ params: idParam, query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }) }),
   asyncHandler(async (req, res) => {
     const movements = await prisma.stockMovement.findMany({
-      where: { productId: req.params.id },
+      where: { productId: req.params.id, organizationId: req.user.organizationId },
       orderBy: { createdAt: 'desc' },
       take: req.query.limit,
     });
@@ -193,8 +216,14 @@ router.get(
 router.delete(
   '/:id',
   authorize(ROLES.ADMIN),
+  requireActiveSubscription,
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
+    const target = await prisma.product.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
+      select: { id: true },
+    });
+    if (!target) throw notFound('Product');
     const product = await prisma.product.update({
       where: { id: req.params.id },
       data: { isActive: false, isQuickKey: false },

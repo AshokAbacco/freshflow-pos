@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authorize, ROLES } from '../middleware/auth.js';
+import { requireActiveSubscription } from '../middleware/subscription.js';
 import { validate } from '../middleware/validate.js';
 import { asyncHandler, HttpError, notFound } from '../utils/http.js';
 import { serializeCategory } from '../utils/serialize.js';
@@ -25,10 +26,10 @@ const categorySchema = z.object({
   sortOrder: z.coerce.number().int().min(0).max(100000).default(0),
 });
 
-async function assertValidParent(parentId, selfId) {
+async function assertValidParent(organizationId, parentId, selfId) {
   if (!parentId) return;
   if (parentId === selfId) throw new HttpError(400, 'A category cannot be its own parent');
-  const parent = await prisma.category.findUnique({ where: { id: parentId }, select: { parentId: true } });
+  const parent = await prisma.category.findFirst({ where: { id: parentId, organizationId }, select: { parentId: true } });
   if (!parent) throw new HttpError(400, 'Parent category not found');
   if (parent.parentId) throw new HttpError(400, 'Sub-categories can only be one level deep');
   if (selfId) {
@@ -37,7 +38,7 @@ async function assertValidParent(parentId, selfId) {
   }
 }
 
-async function uniqueSlug(name, parentId, excludeId) {
+async function uniqueSlug(organizationId, name, parentId, excludeId) {
   let prefix = '';
   if (parentId) {
     const parent = await prisma.category.findUnique({ where: { id: parentId }, select: { slug: true } });
@@ -46,7 +47,10 @@ async function uniqueSlug(name, parentId, excludeId) {
   const base = `${prefix}${slugify(name)}`;
   for (let n = 1; n < 1000; n += 1) {
     const slug = n === 1 ? base : `${base}-${n}`;
-    const taken = await prisma.category.findFirst({ where: { slug, NOT: excludeId ? { id: excludeId } : undefined }, select: { id: true } });
+    const taken = await prisma.category.findFirst({
+      where: { organizationId, slug, NOT: excludeId ? { id: excludeId } : undefined },
+      select: { id: true },
+    });
     if (!taken) return slug;
   }
   throw new HttpError(409, 'Could not generate a unique category slug');
@@ -55,8 +59,9 @@ async function uniqueSlug(name, parentId, excludeId) {
 router.get(
   '/',
   authorize(ROLES.ADMIN, ROLES.CASHIER),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const categories = await prisma.category.findMany({
+      where: { organizationId: req.user.organizationId },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       include: { _count: { select: { products: { where: { isActive: true } } } } },
     });
@@ -67,11 +72,13 @@ router.get(
 router.post(
   '/',
   authorize(ROLES.ADMIN),
+  requireActiveSubscription,
   validate({ body: categorySchema }),
   asyncHandler(async (req, res) => {
-    await assertValidParent(req.body.parentId);
+    const organizationId = req.user.organizationId;
+    await assertValidParent(organizationId, req.body.parentId);
     const category = await prisma.category.create({
-      data: { ...req.body, slug: await uniqueSlug(req.body.name, req.body.parentId) },
+      data: { ...req.body, organizationId, slug: await uniqueSlug(organizationId, req.body.name, req.body.parentId) },
     });
     res.status(201).json({ category: serializeCategory(category) });
   }),
@@ -80,15 +87,20 @@ router.post(
 router.put(
   '/:id',
   authorize(ROLES.ADMIN),
+  requireActiveSubscription,
   validate({ params: idParam, body: categorySchema }),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
+    const organizationId = req.user.organizationId;
+    const existing = await prisma.category.findFirst({ where: { id: req.params.id, organizationId } });
     if (!existing) throw notFound('Category');
-    await assertValidParent(req.body.parentId, req.params.id);
+    await assertValidParent(organizationId, req.body.parentId, req.params.id);
     const slugChanged = existing.name !== req.body.name || existing.parentId !== (req.body.parentId ?? null);
     const category = await prisma.category.update({
       where: { id: req.params.id },
-      data: { ...req.body, ...(slugChanged ? { slug: await uniqueSlug(req.body.name, req.body.parentId, req.params.id) } : {}) },
+      data: {
+        ...req.body,
+        ...(slugChanged ? { slug: await uniqueSlug(organizationId, req.body.name, req.body.parentId, req.params.id) } : {}),
+      },
     });
     res.json({ category: serializeCategory(category) });
   }),
@@ -97,10 +109,11 @@ router.put(
 router.delete(
   '/:id',
   authorize(ROLES.ADMIN),
+  requireActiveSubscription,
   validate({ params: idParam }),
   asyncHandler(async (req, res) => {
-    const category = await prisma.category.findUnique({
-      where: { id: req.params.id },
+    const category = await prisma.category.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId },
       include: { _count: { select: { products: true, children: true, soldItems: true } } },
     });
     if (!category) throw notFound('Category');

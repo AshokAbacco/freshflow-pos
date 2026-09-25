@@ -15,7 +15,7 @@ router.get(
   '/overview',
   validate({ query: dateRangeQuery }),
   asyncHandler(async (req, res) => {
-    res.json(await overviewReport(req.query.from, req.query.to));
+    res.json(await overviewReport(req.user.organizationId, req.query.from, req.query.to));
   }),
 );
 
@@ -23,7 +23,7 @@ router.get(
   '/categories',
   validate({ query: z.intersection(dateRangeQuery, z.object({ level: z.enum(['leaf', 'top']).default('leaf') })) }),
   asyncHandler(async (req, res) => {
-    res.json(await categoryReport(req.query.from, req.query.to, req.query.level));
+    res.json(await categoryReport(req.user.organizationId, req.query.from, req.query.to, req.query.level));
   }),
 );
 
@@ -40,7 +40,7 @@ router.get(
     ),
   }),
   asyncHandler(async (req, res) => {
-    res.json(await productReport(req.query));
+    res.json(await productReport(req.user.organizationId, req.query));
   }),
 );
 

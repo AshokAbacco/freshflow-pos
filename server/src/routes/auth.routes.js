@@ -38,7 +38,11 @@ router.post(
     if (!user || !passwordOk) throw new HttpError(401, 'Email or password is incorrect', 'INVALID_CREDENTIALS');
     if (!user.isActive) throw new HttpError(403, 'This account has been deactivated. Contact your store admin.', 'ACCOUNT_DISABLED');
 
-    res.json({ token: signToken(user), user: publicUser(user) });
+    const organization = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { id: true, name: true, slug: true },
+    });
+    res.json({ token: signToken(user), user: publicUser(user), organization });
   }),
 );
 
@@ -48,7 +52,12 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) throw new HttpError(401, 'Sign in to continue', 'UNAUTHENTICATED');
-    res.json({ user: publicUser(user) });
+    res.json({
+      user: publicUser(user),
+      organization: req.organization
+        ? { id: req.organization.id, name: req.organization.name, slug: req.organization.slug }
+        : null,
+    });
   }),
 );
 

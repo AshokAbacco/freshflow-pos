@@ -25,22 +25,26 @@ const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 
 async function main() {
-  const admin = await prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true } });
+  const admin = await prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true }, orderBy: { createdAt: 'asc' } });
   if (!admin) throw new Error('Run `npm run db:seed` first');
-  const settings = await getSettings({ fresh: true });
+  const organizationId = admin.organizationId;
+  const settings = await getSettings(organizationId, { fresh: true });
 
   const dept = await prisma.category.upsert({
-    where: { slug: 'load-test-lines' },
+    where: { organizationId_slug: { organizationId, slug: 'load-test-lines' } },
     update: {},
-    create: { slug: 'load-test-lines', name: 'Load-test lines', icon: '🧪', sortOrder: 99 },
+    create: { organizationId, slug: 'load-test-lines', name: 'Load-test lines', icon: '🧪', sortOrder: 99 },
   });
 
   const existing = await prisma.category.count({ where: { parentId: dept.id } });
   for (let i = existing; i < CATEGORY_COUNT; i += 1) {
     const n = String(i + 1).padStart(4, '0');
-    const cat = await prisma.category.create({ data: { slug: `load-test-${n}`, name: `Line ${n}`, parentId: dept.id, sortOrder: i } });
+    const cat = await prisma.category.create({
+      data: { organizationId, slug: `load-test-${n}`, name: `Line ${n}`, parentId: dept.id, sortOrder: i },
+    });
     await prisma.product.create({
       data: {
+        organizationId,
         code: `LT${n}`,
         name: `Load-test item ${n}`,
         categoryId: cat.id,
@@ -52,7 +56,7 @@ async function main() {
   }
   console.log(`Categories ready: ${CATEGORY_COUNT}`);
 
-  const products = await prisma.product.findMany({ where: { isActive: true }, select: { id: true, price: true, soldByWeight: true, discountPercent: true } });
+  const products = await prisma.product.findMany({ where: { organizationId, isActive: true }, select: { id: true, price: true, soldByWeight: true, discountPercent: true } });
   // Skewed popularity so the Pareto view looks like a real store.
   const weighted = products.flatMap((p, idx) => Array(Math.max(1, Math.round(40 / (1 + idx / 25)))).fill(p));
 

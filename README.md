@@ -2,10 +2,48 @@
 
 A till that keeps selling when the internet drops, and a back office that answers "how did today go?"
 
+- **Public site**: landing page, pricing, and sign-up that creates a store with a one-month free trial.
 - **Register** (cashiers and admins): barcode scanning, quick codes, category browsing, weighing-scale support, held bills, cash/UPI/card payment, printed and WhatsApp receipts.
-- **Back office** (admins only): daily business report, category and product analytics, bill ledger with voids, inventory and stock ledger, store settings and team management.
+- **Back office** (admins only): daily business report, category and product analytics, bill ledger with voids, inventory, categories, stock ledger, team management, and billing.
 
 Bills completed during an outage are stored on the till and upload on their own once the connection returns. Nothing is lost and nothing is counted twice.
+
+## Multiple stores on one deployment
+
+Every business is an **organization**. Users, categories, products, bills, stock and settings all belong to one, and every query is filtered by it, so two stores on the same server never see each other's data. Invoice numbers run 1, 2, 3… separately for each store.
+
+Anyone can create a store from `/signup`; the first account becomes its admin. Staff are then invited from Settings › Team, and each active account uses one seat on the plan.
+
+| Route | Who |
+| --- | --- |
+| `/` | Landing page, public |
+| `/pricing` | Plans and seat calculator, public |
+| `/signup` | Create a store, public |
+| `/login` | Sign in |
+| `/app` | Register (cashiers and admins) |
+| `/app/reports`, `/app/inventory`, `/app/billing`, `/app/settings` | Admins only |
+
+## Plans and payment
+
+Prices are per staff account, per month, in rupees:
+
+| Plan | Monthly | Yearly (billed 12 months up front) |
+| --- | --- | --- |
+| Free trial | ₹0 for 30 days, up to 3 users | — |
+| Standard | ₹850, **₹650** after the launch discount | ₹650, **₹550** after the launch discount |
+| Custom | ₹1,300, **₹1,000** after the launch discount | ₹1,000, **₹800** after the launch discount |
+
+Change the catalogue in `server/src/config/plans.js`; the pricing page, the billing page and the amount charged all read from it, so they can never disagree.
+
+Payment goes through **Razorpay**. Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `server/.env` to switch it on; without them the Billing page says payments are not configured and everything else still works. Add a webhook in the Razorpay dashboard pointing at `https://your-api/api/billing/webhook` (events `payment.captured` and `payment.failed`) with `RAZORPAY_WEBHOOK_SECRET` set, so a payment still lands if the customer closes the browser mid-way.
+
+Payments are only trusted after the signature check: the handover from checkout is verified as HMAC-SHA256 of `order_id|payment_id`, and webhooks are verified against the exact raw request body. A forged or replayed signature never changes a plan.
+
+**When a trial or plan ends**, the store keeps its data and cashiers keep billing — queued bills still upload, because they describe sales that already happened. What pauses is adding products, categories and staff, until a plan is chosen in Billing.
+
+## Categories are yours to build
+
+Admins manage the category tree from Inventory › Categories: add a department such as **Meat**, give it an icon, and add sub-categories such as Poultry or Mutton under it. Cashiers browse those on the register straight away. A category that holds products, sub-categories, or appears on past bills is kept rather than deleted, so old receipts and reports stay accurate.
 
 ## Requirements
 
@@ -54,6 +92,8 @@ Change both passwords after the first sign-in (Settings › Team). The seed only
 | Area | Cashier | Admin |
 | --- | --- | --- |
 | Register, scanning, scale, held bills, payments | Yes | Yes |
+| Billing and plan changes | No | Yes |
+| Categories | No | Yes |
 | Bill discounts | Up to the configured limit (10% by default) | Any amount |
 | Daily business report and analytics | No | Yes |
 | Bill ledger and voids | No | Yes |

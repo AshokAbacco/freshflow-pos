@@ -36,4 +36,8 @@ export const env = Object.freeze({
     .filter(Boolean),
   trustProxy: process.env.TRUST_PROXY === 'true',
   reportTimezone: validTimezone(process.env.REPORT_TIMEZONE || 'Asia/Kolkata'),
+  appUrl: process.env.APP_URL || 'http://localhost:5173',
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || '',
+  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
 });

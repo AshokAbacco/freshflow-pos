@@ -8,6 +8,8 @@ import { prisma } from './lib/prisma.js';
 import { authenticate } from './middleware/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import authRoutes from './routes/auth.routes.js';
+import billingRoutes, { webhookRouter } from './routes/billing.routes.js';
+import publicRoutes from './routes/public.routes.js';
 import categoryRoutes from './routes/categories.routes.js';
 import productRoutes from './routes/products.routes.js';
 import reportRoutes from './routes/reports.routes.js';
@@ -35,8 +37,13 @@ export function createApp() {
     }),
   );
   app.use(compression());
-  app.use(express.json({ limit: '1mb' }));
   app.use(morgan(env.isProd ? 'combined' : 'dev'));
+
+  // The Razorpay webhook is signed over the exact bytes of the request, so it must be
+  // mounted with its own raw-body parser before the JSON parser touches anything.
+  app.use('/api/billing', webhookRouter);
+
+  app.use(express.json({ limit: '1mb' }));
 
   const api = express.Router();
 
@@ -50,6 +57,10 @@ export function createApp() {
   });
 
   api.use('/auth', authRoutes);
+  // Marketing site, pricing and sign-up: no session required.
+  api.use('/public', publicRoutes);
+  // Billing handles its own authentication (the webhook above is public).
+  api.use('/billing', billingRoutes);
 
   // Everything below requires a valid session; each router declares which roles may use it.
   api.use(authenticate);
