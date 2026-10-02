@@ -7,7 +7,14 @@ import bcrypt from 'bcryptjs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false,
+    },
+  }),
+});
 
 const img = (id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=400&q=80`;
 
@@ -155,8 +162,8 @@ async function main() {
 
   console.log('Seed complete');
   console.log(`  Store   ${organization.name} (30-day free trial, 3 seats)`);
-  console.log(`  Admin   ${admin.user.email}${admin.created ? `  (password: ${env.SEED_ADMIN_PASSWORD || 'Admin@12345'})` : '  (already existed)'}`);
-  console.log(`  Cashier ${cashier.user.email}${cashier.created ? `  (password: ${env.SEED_CASHIER_PASSWORD || 'Cashier@12345'})` : '  (already existed)'}`);
+  console.log(`  Admin   ${admin.user.email}${admin.created ? `  (password: ${env.SEED_ADMIN_PASSWORD || '123456'})` : '  (already existed)'}`);
+  console.log(`  Cashier ${cashier.user.email}${cashier.created ? `  (password: ${env.SEED_CASHIER_PASSWORD || '123456'})` : '  (already existed)'}`);
   console.log(`  Products created: ${createdProducts} of ${PRODUCTS.length}`);
   if (admin.created || cashier.created) console.log('  Change these passwords after first sign-in.');
 }
