@@ -19,7 +19,9 @@
     "db:seed:stress": "node prisma/stress-seed.js",
     "test": "node --test tests/pricing.test.js tests/billing.test.js",
     "test:payments": "node tests/payment-flow.e2e.mjs",
-    "mock:razorpay": "node dev/mock-razorpay.mjs"
+    "mock:razorpay": "node dev/mock-razorpay.mjs",
+    "test:failures": "node tests/failure-status.e2e.mjs",
+    "check:prod": "node scripts/check-production.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

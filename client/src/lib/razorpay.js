@@ -77,6 +77,19 @@ export class CheckoutDismissedError extends Error {
 }
 
 /**
+ * Razorpay declined the payment: wrong OTP, insufficient funds, bank rejection.
+ * No money left the customer's account, so this is safe to report as a failure straight away.
+ */
+export class PaymentDeclinedError extends Error {
+  constructor(message, orderId) {
+    super(message);
+    this.name = "PaymentDeclinedError";
+    this.declined = true;
+    this.orderId = orderId;
+  }
+}
+
+/**
  * Open Razorpay checkout for an order created by our API.
  * Resolves with the handover fields, which the API verifies against Razorpay before
  * changing any plan. Nothing here is trusted on its own.
@@ -119,18 +132,19 @@ export async function openCheckout({ order, customer, description }) {
       const reason =
         event?.error?.description || "The payment did not go through";
       const step = event?.error?.step;
-      // Razorpay reports a failure after the money left the account only in rare edge cases;
-      // treat anything at the authorization step as unconfirmed rather than failed outright.
-      if (
-        step === "payment_authentication" ||
-        step === "payment_authorization"
-      ) {
+      /*
+       * `payment_authorization` is the step where the bank may have taken the money before
+       * failing, so that one is treated as unconfirmed and waits for the webhook. Everything
+       * else — a declined card, a wrong OTP, an abandoned UPI collect request — means no money
+       * moved, and is reported as a failure right away.
+       */
+      if (step === "payment_authorization") {
         settle(
           reject,
           new PaymentUnconfirmedError(order.orderId, new Error(reason)),
         );
       } else {
-        settle(reject, new Error(reason));
+        settle(reject, new PaymentDeclinedError(reason, order.orderId));
       }
     });
 

@@ -107,29 +107,45 @@ webhookRouter.post(
 
     let handled = false;
     let handlingError = null;
+    /*
+     * Why this event did nothing, when it did nothing. Razorpay sends every event for the whole
+     * account to every webhook URL on it, so a deployment sharing a Razorpay account with another
+     * application will see that application's payments here. Those are ignored, and saying so in
+     * the log is the difference between "working as intended" and an afternoon of debugging.
+     */
+    let note = null;
 
     try {
       switch (event?.event) {
         case "payment.captured":
           if (payment?.order_id) {
-            await activateFromWebhook({
+            const result = await activateFromWebhook({
               razorpayOrderId: payment.order_id,
               razorpayPaymentId: payment.id,
               razorpayPayment: payment,
             });
             handled = true;
+            if (result?.skipped === "unknown-order")
+              note = "Ignored: this order belongs to another application";
+            else if (result?.skipped) note = `Ignored: ${result.skipped}`;
+            else if (result?.alreadyApplied) note = "Already applied";
+            else note = "Plan activated";
           }
           break;
 
         case "order.paid":
           // Arrives alongside payment.captured; whichever lands first activates, the other is a no-op.
           if (payment?.id && event?.payload?.order?.entity?.id) {
-            await activateFromWebhook({
+            const result = await activateFromWebhook({
               razorpayOrderId: event.payload.order.entity.id,
               razorpayPaymentId: payment.id,
               razorpayPayment: payment,
             });
             handled = true;
+            if (result?.skipped === "unknown-order")
+              note = "Ignored: this order belongs to another application";
+            else if (result?.alreadyApplied) note = "Already applied";
+            else note = "Plan activated";
           }
           break;
 
@@ -163,6 +179,7 @@ webhookRouter.post(
         default:
           // Any other subscribed event is logged and acknowledged.
           handled = true;
+          note = `No handler for ${event?.event}; logged only`;
           break;
       }
     } catch (err) {
@@ -175,7 +192,7 @@ webhookRouter.post(
 
     await prisma.webhookEvent.update({
       where: { eventId },
-      data: { handled, error: handlingError },
+      data: { handled, error: handlingError ?? note },
     });
 
     /*
@@ -263,6 +280,33 @@ router.post(
 );
 
 /**
+ * The browser reporting that Razorpay declined the payment.
+ *
+ * Razorpay tells the checkout window about a failure immediately, but only tells the server
+ * through the webhook. Without this the attempt would sit at "awaiting payment" until the webhook
+ * arrived — and forever if webhooks are not configured, which is exactly what people hit while
+ * developing on localhost, where Razorpay cannot reach them at all.
+ *
+ * It can only move a pending attempt to failed. A captured payment is never touched by this,
+ * so it cannot be used to undo a real payment.
+ */
+router.post(
+  "/payments/:orderId/failed",
+  validate({
+    params: z.object({ orderId: z.string().trim().min(4).max(64) }),
+    body: z.object({ reason: z.string().trim().max(200).optional() }),
+  }),
+  asyncHandler(async (req, res) => {
+    await markPaymentFailed({
+      razorpayOrderId: req.params.orderId,
+      organizationId: req.user.organizationId,
+      reason: req.body.reason || "Declined at checkout",
+    });
+    res.json({ recorded: true });
+  }),
+);
+
+/**
  * Fallback for a payment whose confirmation never reached us (browser closed, phone died).
  * Reports whether the webhook has since activated the plan, so the admin is not left guessing.
  */
@@ -298,6 +342,23 @@ router.get("/quote", validate({ query: planSchema }), (req, res) => {
   res.json({ quote: quote(req.query) });
 });
 
+/*
+ * An order Razorpay never charged against stays CREATED forever, because nothing happened to it:
+ * the customer closed the window, or never got as far as paying. Calling that "started" for days
+ * is misleading, so anything left pending for longer than this is reported as abandoned.
+ * This is presentation only — the stored status is untouched, and a late webhook can still
+ * settle the attempt either way.
+ */
+const ABANDONED_AFTER_MS = 30 * 60 * 1000;
+
+const outcomeOf = (p) => {
+  if (p.status === "PAID") return "PAID";
+  if (p.status === "FAILED") return "FAILED";
+  return Date.now() - new Date(p.createdAt).getTime() > ABANDONED_AFTER_MS
+    ? "ABANDONED"
+    : "PENDING";
+};
+
 router.get(
   "/payments",
   asyncHandler(async (req, res) => {
@@ -316,6 +377,9 @@ router.get(
         amountRefunded: Number(p.amountRefunded ?? 0),
         currency: p.currency,
         status: p.status,
+        /// PAID | FAILED | PENDING | ABANDONED — what the billing screen labels the row
+        outcome: outcomeOf(p),
+        failureReason: p.failureReason,
         method: p.method,
         reference: p.razorpayPaymentId ?? p.razorpayOrderId,
         paidAt: p.paidAt,

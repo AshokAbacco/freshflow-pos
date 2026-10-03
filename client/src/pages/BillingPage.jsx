@@ -29,6 +29,17 @@ const STATUS_COPY = {
   EXPIRED: { tone: "bg-rose-50 text-rose-700", label: "Ended" },
 };
 
+/*
+ * How a past attempt is labelled. "Not completed" matters: an order where the customer closed
+ * the window was never charged and never failed, and calling it either would be wrong.
+ */
+const OUTCOME = {
+  PAID: { label: "Paid", tone: "bg-brand-50 text-brand-700" },
+  FAILED: { label: "Failed", tone: "bg-rose-50 text-rose-700" },
+  PENDING: { label: "Awaiting payment", tone: "bg-amber-50 text-amber-800" },
+  ABANDONED: { label: "Not completed", tone: "bg-slate-100 text-slate-600" },
+};
+
 const POLL_ATTEMPTS = 10;
 const POLL_INTERVAL_MS = 3000;
 
@@ -115,6 +126,21 @@ export default function BillingPage() {
     } catch (err) {
       if (err?.dismissed) {
         toast.info("Payment cancelled. Nothing was charged.");
+        setBusyTier(null);
+        return;
+      }
+
+      /*
+       * Razorpay declined the payment outright. It tells the checkout window straight away but
+       * only tells the server via the webhook, so report it here too: without this the attempt
+       * sits at "awaiting payment" indefinitely when webhooks are not set up.
+       */
+      if (orderId && err?.declined) {
+        api
+          .post(`/billing/payments/${orderId}/failed`, { reason: err.message })
+          .catch(() => {});
+        setError(`${err.message}. Nothing was charged — you can try again.`);
+        payments.refetch();
         setBusyTier(null);
         return;
       }
@@ -360,6 +386,11 @@ export default function BillingPage() {
                       {p.method ? `${p.method.toUpperCase()} · ` : ""}
                       {p.reference}
                     </p>
+                    {p.failureReason ? (
+                      <p className="truncate text-desc text-rose-600">
+                        {p.failureReason}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="shrink-0 text-right">
                     <span className="font-semibold tabular">
@@ -372,19 +403,9 @@ export default function BillingPage() {
                     ) : null}
                   </div>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-desc font-medium ${
-                      p.status === "PAID"
-                        ? "bg-brand-50 text-brand-700"
-                        : p.status === "FAILED"
-                          ? "bg-rose-50 text-rose-700"
-                          : "bg-slate-100 text-slate-600"
-                    }`}
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-desc font-medium ${OUTCOME[p.outcome]?.tone ?? OUTCOME.PENDING.tone}`}
                   >
-                    {p.status === "PAID"
-                      ? "Paid"
-                      : p.status === "FAILED"
-                        ? "Failed"
-                        : "Started"}
+                    {OUTCOME[p.outcome]?.label ?? OUTCOME.PENDING.label}
                   </span>
                 </li>
               ))}
