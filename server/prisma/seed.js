@@ -1,12 +1,32 @@
 /**
- * Seeds the production baseline: store profile, the two role accounts, the category tree and
- * the product catalog from the store blueprint. Safe to re-run (upserts; never touches sales).
+ * Seeds the demo store: FreshFlow Supermarket, its settings, trial and the starter catalog from
+ * store-template.js (the same catalog every new signup gets). Safe to re-run; never touches sales.
+ *
+ * Staff accounts are NOT created by default. Real users sign up through POST /auth/register.
+ * Create the demo admin + cashier only when you ask for them:
+ *
+ *   npm run db:seed                        → store, settings, catalog. No users.
+ *   npm run db:seed -- --with-users        → also create the demo admin and cashier
+ *   SEED_CREATE_USERS=true npm run db:seed → same as --with-users
+ *
+ *   SEED_RESET_PASSWORDS=true npm run db:seed -- --with-users
+ *                                          → also force the .env passwords back onto them
+ *
+ * Even with --with-users, an account that already exists is never created twice or changed
+ * (unless SEED_RESET_PASSWORDS=true).
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { reportDbError } from "./db-errors.js";
+import {
+  applyStoreTemplate,
+  defaultStoreSettings,
+  trialSubscription,
+  TRIAL_DAYS,
+  TRIAL_SEATS,
+} from "../src/lib/store-template.js";
 
 /*
  * SSL is decided by DATABASE_URL, never hardcoded here. A local PostgreSQL has no SSL and needs
@@ -18,353 +38,26 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-const img = (id) =>
-  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=400&q=80`;
-
-const CATEGORY_TREE = [
-  {
-    slug: "fresh-produce",
-    name: "Fresh Produce",
-    icon: "🥦",
-    sortOrder: 1,
-    children: [
-      {
-        slug: "fresh-produce-fruits",
-        name: "Fruits",
-        icon: "🍎",
-        sortOrder: 1,
-      },
-      {
-        slug: "fresh-produce-leafy-greens",
-        name: "Leafy Greens & Herbs",
-        icon: "🥬",
-        sortOrder: 2,
-      },
-      {
-        slug: "fresh-produce-vegetables",
-        name: "Vegetables",
-        icon: "🥕",
-        sortOrder: 3,
-      },
-    ],
-  },
-  { slug: "dairy-bakery", name: "Dairy & Bakery", icon: "🥛", sortOrder: 2 },
-  {
-    slug: "grains-staples",
-    name: "Grains & Staples",
-    icon: "🌾",
-    sortOrder: 3,
-  },
-  { slug: "snacks-drinks", name: "Snacks & Drinks", icon: "🥨", sortOrder: 4 },
-  {
-    slug: "stationery-supplies",
-    name: "Stationery & Supplies",
-    icon: "✏️",
-    sortOrder: 5,
-  },
-];
-
-// [code, name, categorySlug, barcode, price, unit, soldByWeight, stock, discount%, quickKey, image]
-const PRODUCTS = [
-  [
-    "101",
-    "Crisp Washington Apples",
-    "fresh-produce-fruits",
-    "890123450001",
-    160,
-    "kg",
-    true,
-    42.5,
-    0,
-    true,
-    "photo-1560806887-1e4cd0b6cbd6",
-  ],
-  [
-    "102",
-    "Organic Cavendish Bananas",
-    "fresh-produce-fruits",
-    "890123450002",
-    48,
-    "kg",
-    true,
-    28,
-    20,
-    true,
-    "photo-1571771894821-ce9b6c11b08e",
-  ],
-  [
-    "103",
-    "Farm Fresh Roma Tomatoes",
-    "fresh-produce-vegetables",
-    "890123450003",
-    35,
-    "kg",
-    true,
-    65,
-    0,
-    true,
-    "photo-1592924357228-91a4daadcfea",
-  ],
-  [
-    "104",
-    "Hass Avocados (Pack of 2)",
-    "fresh-produce-fruits",
-    "890123450004",
-    190,
-    "pack",
-    false,
-    15,
-    0,
-    false,
-    "photo-1523049673857-eb18f1d7b578",
-  ],
-  [
-    "105",
-    "Nagpur Sweet Oranges",
-    "fresh-produce-fruits",
-    "890123450013",
-    80,
-    "kg",
-    true,
-    35,
-    0,
-    false,
-    "photo-1582979512210-99b6a53386f9",
-  ],
-  [
-    "106",
-    "Ruby Red Pomegranate",
-    "fresh-produce-fruits",
-    "890123450014",
-    175,
-    "kg",
-    true,
-    22,
-    0,
-    false,
-    "photo-1541344999736-83eca872f240",
-  ],
-  [
-    "107",
-    "Fresh Hydroponic Spinach (Palak)",
-    "fresh-produce-leafy-greens",
-    "890123450015",
-    30,
-    "bunch",
-    false,
-    40,
-    0,
-    true,
-    "photo-1576045057995-568f588f82fb",
-  ],
-  [
-    "108",
-    "Organic Coriander Leaves (Dhaniya)",
-    "fresh-produce-leafy-greens",
-    "890123450016",
-    20,
-    "bunch",
-    false,
-    50,
-    0,
-    true,
-    "photo-1588879462719-75702ee61586",
-  ],
-  [
-    "109",
-    "Aromatic Fresh Mint (Pudina)",
-    "fresh-produce-leafy-greens",
-    "890123450017",
-    15,
-    "bunch",
-    false,
-    35,
-    0,
-    false,
-    "photo-1628556270448-4d4e4148e1b1",
-  ],
-  [
-    "110",
-    "Fresh Fenugreek Leaves (Methi)",
-    "fresh-produce-leafy-greens",
-    "890123450018",
-    25,
-    "bunch",
-    false,
-    30,
-    0,
-    false,
-    "photo-1540420773420-3366772f4999",
-  ],
-  [
-    "111",
-    "Nashik Red Onions",
-    "fresh-produce-vegetables",
-    "890123450019",
-    38,
-    "kg",
-    true,
-    80,
-    0,
-    true,
-    "photo-1618512496248-a07fe83aa8cb",
-  ],
-  [
-    "112",
-    "Farm Fresh Jyoti Potatoes",
-    "fresh-produce-vegetables",
-    "890123450020",
-    30,
-    "kg",
-    true,
-    95,
-    0,
-    false,
-    "photo-1518977676601-b53f82aba655",
-  ],
-  [
-    "113",
-    "Crisp English Cucumbers",
-    "fresh-produce-vegetables",
-    "890123450021",
-    42,
-    "kg",
-    true,
-    30,
-    0,
-    false,
-    "photo-1604977042946-1eecc30f269e",
-  ],
-  [
-    "114",
-    "Fresh Crunchy Carrots",
-    "fresh-produce-vegetables",
-    "890123450022",
-    48,
-    "kg",
-    true,
-    45,
-    0,
-    false,
-    "photo-1598170845058-32b9d6a5da37",
-  ],
-  [
-    "201",
-    "Farm Pasteurized Whole Milk (1L)",
-    "dairy-bakery",
-    "890123450005",
-    68,
-    "pouch",
-    false,
-    50,
-    0,
-    true,
-    "photo-1563636619-e9143da7973b",
-  ],
-  [
-    "202",
-    "Whole Wheat Sliced Bread (400g)",
-    "dairy-bakery",
-    "890123450006",
-    45,
-    "pack",
-    false,
-    24,
-    20,
-    false,
-    "photo-1509440159596-0249088772ff",
-  ],
-  [
-    "301",
-    "Royal Basmati Rice (5kg)",
-    "grains-staples",
-    "890123450007",
-    540,
-    "bag",
-    false,
-    30,
-    0,
-    true,
-    "photo-1586201375761-83865001e31c",
-  ],
-  [
-    "302",
-    "Organic Yellow Toor Dal (1kg)",
-    "grains-staples",
-    "890123450008",
-    165,
-    "pack",
-    false,
-    40,
-    0,
-    false,
-    "photo-1546069901-ba9599a7e63c",
-  ],
-  [
-    "401",
-    "Classic Potato Chips (150g)",
-    "snacks-drinks",
-    "890123450009",
-    50,
-    "pack",
-    false,
-    60,
-    0,
-    false,
-    "photo-1566478989037-eec170784d0b",
-  ],
-  [
-    "601",
-    "Hardbound Spiral Notebook (180 pgs)",
-    "stationery-supplies",
-    "890123450010",
-    85,
-    "pcs",
-    false,
-    35,
-    0,
-    true,
-    "photo-1544716278-ca5e3f4abd8c",
-  ],
-  [
-    "602",
-    "Quick-Dry Gel Pens (Pack of 5)",
-    "stationery-supplies",
-    "890123450011",
-    120,
-    "pack",
-    false,
-    50,
-    0,
-    false,
-    "photo-1585336261026-8f5786372966",
-  ],
-  [
-    "603",
-    "Pastel Sticky Notes (400 Sheets)",
-    "stationery-supplies",
-    "890123450012",
-    65,
-    "pcs",
-    false,
-    45,
-    0,
-    false,
-    "photo-1586075010923-2dd4570fb338",
-  ],
-];
+const WITH_USERS =
+  process.argv.includes("--with-users") ||
+  process.env.SEED_CREATE_USERS === "true";
 
 /*
- * Creates the account on a first run. On later runs the existing account is left alone, so a
- * re-seed never quietly changes a password someone has since set themselves.
- *
- * That does mean editing SEED_ADMIN_PASSWORD in .env has no effect on an account that already
- * exists. Run with SEED_RESET_PASSWORDS=true to force the seeded passwords back on.
+ * Creates the account if it does not exist. An existing account is left alone, so a re-seed
+ * never duplicates a user or quietly changes a password someone has since set themselves.
+ * Run with SEED_RESET_PASSWORDS=true to force the .env passwords back on.
  */
-async function upsertUser(organizationId, name, email, password, role) {
+async function upsertUser(organizationId, name, rawEmail, password, role) {
+  // Lowercase before the lookup too, or a mixed-case email in .env would miss the existing
+  // row on a re-run and then fail the unique constraint on create.
+  const email = rawEmail.trim().toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
 
   if (existing) {
+    if (existing.organizationId !== organizationId) {
+      // The email belongs to someone in another store; never touch their account.
+      return { user: existing, created: false, reset: false, foreign: true };
+    }
     if (process.env.SEED_RESET_PASSWORDS === "true") {
       const user = await prisma.user.update({
         where: { id: existing.id },
@@ -379,7 +72,7 @@ async function upsertUser(organizationId, name, email, password, role) {
     data: {
       organizationId,
       name,
-      email: email.toLowerCase(),
+      email,
       role,
       passwordHash: await bcrypt.hash(password, 12),
     },
@@ -388,12 +81,11 @@ async function upsertUser(organizationId, name, email, password, role) {
 }
 
 const describeAccount = (result, password) => {
-  if (result.created) return `  (password: ${password})`;
+  if (result.foreign) return "  (email used by another store, skipped)";
+  if (result.created) return `  (created, password: ${password})`;
   if (result.reset) return `  (password reset to: ${password})`;
-  return "  (already existed, password unchanged)";
+  return "  (already existed, unchanged)";
 };
-
-const TRIAL_DAYS = 30;
 
 async function main() {
   const env = process.env;
@@ -408,132 +100,99 @@ async function main() {
   await prisma.subscription.upsert({
     where: { organizationId },
     update: {},
-    create: {
-      organizationId,
-      plan: "TRIAL",
-      interval: "MONTHLY",
-      seats: 3,
-      status: "TRIALING",
-      pricePerUser: "0.00",
-      trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86_400_000),
-      currentPeriodEnd: new Date(Date.now() + TRIAL_DAYS * 86_400_000),
-    },
+    create: { organizationId, ...trialSubscription() },
   });
 
+  // The demo store keeps its own sample identity on top of the neutral defaults.
   await prisma.storeSetting.upsert({
     where: { organizationId },
     update: {},
     create: {
       organizationId,
-      storeName: "FreshFlow Supermarket",
+      ...defaultStoreSettings({
+        storeName: "FreshFlow Supermarket",
+        phone: "+91 98765 43210",
+        address: "123 Retail Hub, MG Road, Bengaluru 560001",
+      }),
       tagline: "Fresh quality, daily low prices",
       gstin: "29AAAAA0000A1Z5",
-      address: "123 Retail Hub, MG Road, Bengaluru 560001",
-      phone: "+91 98765 43210",
       upiVpa: env.SEED_UPI_VPA || null,
-      upiPayeeName: "FreshFlow Supermarket",
-      taxRate: 5,
-      maxCashierDiscountPct: 10,
-      receiptFooter: "Returns accepted within 7 days with this bill.",
     },
   });
 
-  const admin = await upsertUser(
-    organizationId,
-    env.SEED_ADMIN_NAME || "Store Admin",
-    env.SEED_ADMIN_EMAIL || "admin@freshflow.local",
-    env.SEED_ADMIN_PASSWORD || "Admin@12345",
-    "ADMIN",
-  );
-  const cashier = await upsertUser(
-    organizationId,
-    env.SEED_CASHIER_NAME || "Front Desk Cashier",
-    env.SEED_CASHIER_EMAIL || "cashier@freshflow.local",
-    env.SEED_CASHIER_PASSWORD || "Cashier@12345",
-    "CASHIER",
-  );
+  const adminPassword = env.SEED_ADMIN_PASSWORD || "Admin@12345";
+  const cashierPassword = env.SEED_CASHIER_PASSWORD || "Cashier@12345";
+  let admin = null;
+  let cashier = null;
 
-  const categoryIds = {};
-  for (const top of CATEGORY_TREE) {
-    const { children = [], ...data } = top;
-    const parent = await prisma.category.upsert({
-      where: { organizationId_slug: { organizationId, slug: data.slug } },
-      update: {},
-      create: { ...data, organizationId },
-    });
-    categoryIds[data.slug] = parent.id;
-    for (const child of children) {
-      const c = await prisma.category.upsert({
-        where: { organizationId_slug: { organizationId, slug: child.slug } },
-        update: {},
-        create: { ...child, organizationId, parentId: parent.id },
-      });
-      categoryIds[child.slug] = c.id;
-    }
+  if (WITH_USERS) {
+    admin = await upsertUser(
+      organizationId,
+      env.SEED_ADMIN_NAME || "Store Admin",
+      env.SEED_ADMIN_EMAIL || "admin@freshflow.local",
+      adminPassword,
+      "ADMIN",
+    );
+    cashier = await upsertUser(
+      organizationId,
+      env.SEED_CASHIER_NAME || "Front Desk Cashier",
+      env.SEED_CASHIER_EMAIL || "cashier@freshflow.local",
+      cashierPassword,
+      "CASHIER",
+    );
   }
 
-  let createdProducts = 0;
-  for (const [
-    code,
-    name,
-    slug,
-    barcode,
-    price,
-    unit,
-    soldByWeight,
-    stock,
-    discountPercent,
-    isQuickKey,
-    image,
-  ] of PRODUCTS) {
-    const exists = await prisma.product.findUnique({
-      where: { organizationId_code: { organizationId, code } },
-      select: { id: true },
-    });
-    if (exists) continue;
-    await prisma.product.create({
-      data: {
+  // Opening-stock entries are credited to this store's admin when there is one, else left blank.
+  const stockUserId =
+    (admin && !admin.foreign ? admin.user.id : null) ??
+    (
+      await prisma.user.findFirst({
+        where: { organizationId, role: "ADMIN" },
+        select: { id: true },
+      })
+    )?.id ??
+    null;
+
+  // Demo store gets the sample stock levels; real signups start at zero.
+  const catalog = await prisma.$transaction(
+    (tx) =>
+      applyStoreTemplate(tx, {
         organizationId,
-        code,
-        name,
-        barcode,
-        unit,
-        soldByWeight,
-        isQuickKey,
-        categoryId: categoryIds[slug],
-        price: price.toFixed(2),
-        stock: stock.toFixed(3),
-        lowStockThreshold: soldByWeight ? "10.000" : "8.000",
-        discountPercent: discountPercent.toFixed(2),
-        imageUrl: img(image),
-        stockMovements: {
-          create: {
-            organizationId,
-            type: "RESTOCK",
-            quantity: stock.toFixed(3),
-            reason: "Opening stock",
-            userId: admin.user.id,
-          },
-        },
-      },
-    });
-    createdProducts += 1;
-  }
+        userId: stockUserId,
+        openingStock: true,
+      }),
+    { timeout: 15_000 },
+  );
 
   console.log("Seed complete");
-  console.log(`  Store   ${organization.name} (30-day free trial, 3 seats)`);
   console.log(
-    `  Admin   ${admin.user.email}${describeAccount(admin, env.SEED_ADMIN_PASSWORD || "Admin@12345")}`,
+    `  Store   ${organization.name} (${TRIAL_DAYS}-day free trial, ${TRIAL_SEATS} seats)`,
+  );
+  console.log(`  Categories created: ${catalog.categoriesCreated}`);
+  console.log(
+    `  Products created: ${catalog.productsCreated} of ${catalog.productsInTemplate}`,
+  );
+
+  if (!WITH_USERS) {
+    console.log("\n  Users   skipped (none created or changed)");
+    console.log("  To create the demo admin and cashier:");
+    console.log("    npm run db:seed -- --with-users");
+    return;
+  }
+
+  console.log(
+    `  Admin   ${admin.user.email}${describeAccount(admin, adminPassword)}`,
   );
   console.log(
-    `  Cashier ${cashier.user.email}${describeAccount(cashier, env.SEED_CASHIER_PASSWORD || "Cashier@12345")}`,
+    `  Cashier ${cashier.user.email}${describeAccount(cashier, cashierPassword)}`,
   );
-  console.log(`  Products created: ${createdProducts} of ${PRODUCTS.length}`);
   if (admin.created || cashier.created)
     console.log("\n  Change these passwords after first sign-in.");
-  if (!admin.created && !admin.reset) {
+  if (!admin.created && !admin.reset && !admin.foreign) {
     console.log("\n  To force the passwords in .env back onto these accounts:");
-    console.log("    SEED_RESET_PASSWORDS=true npm run db:seed");
+    console.log(
+      "    SEED_RESET_PASSWORDS=true npm run db:seed -- --with-users",
+    );
   }
 }
 

@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
-import { api } from '../lib/api';
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { api } from "../lib/api";
 
 export const useAuthStore = create(
   persist(
@@ -12,30 +12,49 @@ export const useAuthStore = create(
       sessionMessage: null,
 
       async login(email, password) {
-        const { data } = await api.post('/auth/login', { email, password }, { skipAuthHandling: true });
-        set({ token: data.token, user: data.user, organization: data.organization ?? null, sessionMessage: null });
+        const { data } = await api.post(
+          "/auth/login",
+          { email, password },
+          { skipAuthHandling: true },
+        );
+        set({
+          token: data.token,
+          user: data.user,
+          organization: data.organization ?? null,
+          sessionMessage: null,
+        });
         get().refreshSubscription();
         return data.user;
       },
 
-      /** Create a store and its first admin, then sign straight in. */
+      /**
+       * Create a store and its first admin, then sign straight in.
+       * /auth/register also gives the new store the starter catalog (categories + products).
+       * Returns the whole response so the sign-up page can show what was set up.
+       */
       async signup(details) {
-        const { data } = await api.post('/public/signup', details, { skipAuthHandling: true });
+        const { data } = await api.post("/auth/register", details, {
+          skipAuthHandling: true,
+        });
         set({
           token: data.token,
           user: data.user,
-          organization: data.organization,
-          subscription: data.subscription,
+          organization: data.organization ?? null,
+          subscription: data.subscription ?? null,
           sessionMessage: null,
         });
-        return data.user;
+        if (!data.subscription) get().refreshSubscription();
+        return data;
       },
 
       async refreshSubscription() {
         if (!get().token) return null;
         try {
-          const { data } = await api.get('/billing/subscription');
-          set({ subscription: data.subscription, paymentsEnabled: data.paymentsEnabled });
+          const { data } = await api.get("/billing/subscription");
+          set({
+            subscription: data.subscription,
+            paymentsEnabled: data.paymentsEnabled,
+          });
           return data.subscription;
         } catch {
           return null;
@@ -46,8 +65,11 @@ export const useAuthStore = create(
       async refreshProfile() {
         if (!get().token || !navigator.onLine) return;
         try {
-          const { data } = await api.get('/auth/me');
-          set({ user: data.user, organization: data.organization ?? get().organization });
+          const { data } = await api.get("/auth/me");
+          set({
+            user: data.user,
+            organization: data.organization ?? get().organization,
+          });
           get().refreshSubscription();
         } catch {
           /* 401s are handled by the API interceptor; network errors keep the cached session */
@@ -56,15 +78,26 @@ export const useAuthStore = create(
 
       logout(message = null) {
         // Deliberately does NOT clear the IndexedDB outbox: unsynced bills upload after the next sign-in.
-        set({ token: null, user: null, organization: null, subscription: null, sessionMessage: message });
+        set({
+          token: null,
+          user: null,
+          organization: null,
+          subscription: null,
+          sessionMessage: message,
+        });
       },
     }),
     {
-      name: 'ff_auth',
+      name: "ff_auth",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ token: s.token, user: s.user, organization: s.organization, subscription: s.subscription }),
+      partialize: (s) => ({
+        token: s.token,
+        user: s.user,
+        organization: s.organization,
+        subscription: s.subscription,
+      }),
     },
   ),
 );
 
-export const selectIsAdmin = (s) => s.user?.role === 'ADMIN';
+export const selectIsAdmin = (s) => s.user?.role === "ADMIN";
