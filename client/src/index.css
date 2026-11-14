@@ -3,64 +3,86 @@
 @tailwind utilities;
 
 @layer base {
+
   html,
   body,
   #root {
     height: 100%;
   }
+
   body {
-    @apply bg-slate-50 font-sans text-body text-slate-900 antialiased;
+    @apply bg-surface font-sans text-body text-ink antialiased;
     -webkit-tap-highlight-color: transparent;
   }
+
   h1 {
-    @apply text-h1 font-semibold;
+    @apply text-h1 font-bold;
   }
+
   h2 {
-    @apply text-h2 font-semibold;
+    @apply text-h2 font-bold;
   }
+
   h3 {
-    @apply text-body font-semibold;
+    @apply text-body font-bold;
   }
+
   input,
   select,
   textarea,
   button {
     @apply text-body;
   }
+
+  /* A visible ring matters more here than anywhere: the register is driven from the keyboard. */
   :focus-visible {
-    @apply outline-none ring-2 ring-brand/60 ring-offset-2 ring-offset-white;
+    @apply outline-none ring-[3px] ring-brand ring-offset-2 ring-offset-white;
   }
+
   ::selection {
-    @apply bg-brand-100 text-brand-800;
+    @apply bg-brand-100 text-brand-900;
   }
 }
 
 @layer components {
+
+  /*
+   * Every figure on the register uses this: columns of money line up, and a slashed zero
+   * is never mistaken for an eight across the counter.
+   */
   .tabular {
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums slashed-zero;
   }
+
   .field {
-    @apply block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-body text-slate-900 placeholder:text-slate-400 transition focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 disabled:bg-slate-50 disabled:text-slate-500;
+    @apply block h-tap w-full rounded-xl border border-surface-line bg-white px-3.5 text-body text-ink placeholder:text-ink-faint transition focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/30 disabled:bg-surface-sunk disabled:text-ink-muted;
   }
+
   .label {
-    @apply mb-1.5 block text-desc font-medium text-slate-600;
+    @apply mb-1.5 block text-desc font-semibold text-ink-muted;
   }
-  .glass {
-    @apply border border-white/60 bg-white/80 backdrop-blur-xl;
+
+  /* Physical-looking key cap, so the shortcut legend reads as a key and not as decoration. */
+  .kbd {
+    @apply inline-grid h-6 min-w-[1.5rem] place-items-center rounded-[5px] border border-surface-line border-b-2 border-b-ink-faint/50 bg-white px-1.5 font-sans text-desc font-bold text-ink-soft;
   }
+
   .scroll-thin {
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-color: #d8cfc3 transparent;
   }
+
   .no-scrollbar {
     scrollbar-width: none;
   }
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -73,14 +95,17 @@
 #print-root {
   display: none;
 }
+
 @media print {
   @page {
     size: 80mm auto;
     margin: 4mm;
   }
-  body > *:not(#print-root) {
+
+  body>*:not(#print-root) {
     display: none !important;
   }
+
   #print-root {
     display: block !important;
   }

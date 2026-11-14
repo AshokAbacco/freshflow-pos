@@ -10,7 +10,7 @@ export function Segmented({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className={`inline-flex rounded-full bg-[#F1ECE4] p-1 ${className}`}
+      className={`inline-flex gap-1 rounded-xl border border-surface-line bg-surface-sunk p-1 ${className}`}
     >
       {options.map((opt) => {
         const active = opt.value === value;
@@ -22,9 +22,9 @@ export function Segmented({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(opt.value)}
-            className={`inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition ${
-              size === "sm" ? "h-7 px-3 text-desc" : "h-9 px-4 text-body"
-            } ${active ? "bg-brand font-bold text-white shadow-md shadow-brand/25" : "text-gray-600 hover:text-gray-900"}`}
+            className={`inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-bold transition ${
+              size === "sm" ? "h-9 px-3 text-body" : "h-12 px-4 text-h2"
+            } ${active ? "bg-ink text-white" : "text-ink-muted hover:bg-white hover:text-ink"}`}
           >
             {Icon ? <Icon aria-hidden /> : null}
             {opt.label}

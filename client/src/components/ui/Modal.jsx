@@ -80,7 +80,7 @@ export function Modal({
       role="presentation"
     >
       <div
-        className="absolute inset-0 animate-fade-in bg-black/40 backdrop-blur-[4px]"
+        className="absolute inset-0 animate-fade-in bg-ink/40 backdrop-blur-[3px]"
         onClick={dismissible ? onClose : undefined}
         aria-hidden
       />
@@ -91,19 +91,14 @@ export function Modal({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={`relative flex max-h-[92dvh] w-full animate-sheet-in flex-col overflow-hidden rounded-t-2xl border-t-4 border-brand bg-white shadow-glass outline-none sm:rounded-2xl ${widths[size]}`}
+        className={`relative flex max-h-[92dvh] w-full animate-sheet-in flex-col rounded-t-2xl border border-surface-line bg-white shadow-modal outline-none sm:rounded-2xl ${widths[size]}`}
       >
         {title ? (
-          <header className="flex items-start gap-3 px-5 pb-3 pt-5 sm:px-6">
+          <header className="flex items-start gap-3 border-b border-surface-line px-5 py-4 sm:px-6">
             <div className="min-w-0 flex-1">
-              <h2
-                id={titleId}
-                className="text-h2 font-extrabold tracking-tight text-gray-900"
-              >
-                {title}
-              </h2>
+              <h2 id={titleId}>{title}</h2>
               {description ? (
-                <p id={descId} className="mt-0.5 text-desc text-slate-500">
+                <p id={descId} className="mt-0.5 text-desc text-ink-muted">
                   {description}
                 </p>
               ) : null}
@@ -113,7 +108,7 @@ export function Modal({
                 type="button"
                 data-close
                 onClick={onClose}
-                className="-mr-1 grid h-8 w-8 place-items-center rounded-full bg-[#F8F4EE] text-gray-600 transition hover:bg-[#FF7B29] hover:text-white"
+                className="-mr-1 grid h-10 w-10 place-items-center rounded-lg text-ink-muted transition hover:bg-surface-sunk"
                 aria-label="Close"
               >
                 <LuX />
@@ -121,11 +116,11 @@ export function Modal({
             ) : null}
           </header>
         ) : null}
-        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
+        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {children}
         </div>
         {footer ? (
-          <footer className="border-t border-black/5 bg-[#FBFAF8] px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+          <footer className="border-t border-surface-line bg-surface px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
             {footer}
           </footer>
         ) : null}

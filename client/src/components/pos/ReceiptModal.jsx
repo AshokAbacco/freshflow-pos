@@ -175,39 +175,49 @@ export function ReceiptModal({ receipt, onClose }) {
         }
       >
         <div className="flex flex-col items-center text-center">
-          <div className="grid h-16 w-16 place-items-center rounded-full bg-brand text-white ring-8 ring-brand-50">
-            <LuCircleCheck size={30} aria-hidden />
-          </div>
-          <p className="mt-4 text-h1 font-extrabold text-gray-900 tabular">
-            {formatMoney(receipt.totals.grandTotal, currency)}
-          </p>
-          <p className="mt-0.5 text-desc text-slate-500">{receipt.reference}</p>
+          {/*
+            Change comes first when there is change. It is the one thing still owed to the
+            customer standing at the counter; the total is already settled.
+          */}
           {receipt.changeDue ? (
-            <p className="mt-3 rounded-full bg-brand-50 px-4 py-1.5 text-body font-semibold text-brand-800 tabular">
-              Return {formatMoney(receipt.changeDue, currency)} change
-            </p>
-          ) : null}
+            <div className="w-full rounded-xl bg-brand px-4 py-3">
+              <p className="text-desc font-bold text-ink/70">Return change</p>
+              <p className="text-num-xl font-extrabold text-ink tabular">
+                {formatMoney(receipt.changeDue, currency)}
+              </p>
+            </div>
+          ) : (
+            <div className="grid h-14 w-14 place-items-center rounded-full bg-stock-ok text-white">
+              <LuCircleCheck size={28} aria-hidden />
+            </div>
+          )}
+          <p className="mt-3 text-h2 font-bold text-ink-soft">
+            Paid {formatMoney(receipt.totals.grandTotal, currency)}
+          </p>
+          <p className="mt-0.5 text-desc text-ink-muted tabular">
+            {receipt.reference}
+          </p>
           {receipt.totals.discountTotal ? (
-            <p className="mt-2 text-desc font-semibold text-[#FF7B29]">
+            <p className="mt-2 text-desc font-bold text-brand-800">
               Customer saved{" "}
               {formatMoney(receipt.totals.discountTotal, currency)}
             </p>
           ) : null}
           {receipt.pending ? (
-            <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-[#FFF1E6] text-[#9A3F0B] px-3 py-2 text-desc">
+            <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-stock-lowBg px-3 py-2 text-desc font-semibold text-stock-low">
               <LuCloudUpload aria-hidden /> Saved on this register. The invoice
               number is assigned when it uploads.
             </p>
           ) : null}
         </div>
 
-        <details className="mt-5 rounded-lg bg-[#F8F4EE] p-3">
-          <summary className="cursor-pointer list-none text-desc font-semibold text-slate-600">
+        <details className="mt-5 rounded-lg bg-surface-sunk p-3">
+          <summary className="cursor-pointer list-none text-desc font-semibold text-ink-muted">
             <span className="inline-flex items-center gap-1.5">
               <LuReceipt aria-hidden /> View receipt
             </span>
           </summary>
-          <div className="mt-3 overflow-x-auto rounded-lg bg-white p-3 ring-1 ring-black/5">
+          <div className="mt-3 overflow-x-auto rounded-lg border border-surface-line bg-white p-3">
             <ThermalReceipt r={receipt} />
           </div>
         </details>
@@ -216,7 +226,7 @@ export function ReceiptModal({ receipt, onClose }) {
           <button
             type="button"
             onClick={printThermal}
-            className="mt-3 inline-flex items-center gap-1.5 text-desc font-semibold text-brand-700"
+            className="mt-3 inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-desc font-bold text-brand-800 hover:bg-brand-50"
           >
             <LuUsb aria-hidden /> Also print on the thermal printer
           </button>

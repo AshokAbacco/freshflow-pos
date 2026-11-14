@@ -105,7 +105,7 @@ export function DiscountModal({
           {PRESETS.map((p) => (
             <Button
               key={p}
-              size="sm"
+              size="md"
               variant={numeric === p ? "primary" : "secondary"}
               disabled={!isAdmin && p > maxCashierPct}
               onClick={() => setValue(String(p))}
@@ -115,6 +115,15 @@ export function DiscountModal({
           ))}
         </div>
       ) : null}
+
+      <div className="mt-3 flex items-baseline justify-between rounded-xl bg-brand-50 px-3 py-2.5">
+        <span className="text-desc font-bold text-brand-800">
+          Comes off the bill
+        </span>
+        <span className="text-num-lg font-extrabold text-ink tabular">
+          −{formatMoney(fromPaise(discountPaise), currency)}
+        </span>
+      </div>
 
       <div className="mt-4">
         <label htmlFor="discount-reason" className="label">
@@ -132,7 +141,7 @@ export function DiscountModal({
 
       {overCap ? (
         <p
-          className="mt-3 rounded-lg bg-[#FFF1E6] text-[#9A3F0B] px-3 py-2 text-desc"
+          className="mt-3 rounded-lg bg-stock-outBg px-3 py-2 text-desc font-semibold text-stock-out"
           role="alert"
         >
           That is {effectivePct.toFixed(1)}% of the bill. Ask an admin to apply

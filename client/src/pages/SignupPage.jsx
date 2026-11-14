@@ -149,7 +149,7 @@ export default function SignupPage() {
         {/* ================= Photo side ================= */}
         <section className="relative flex h-56 flex-col overflow-hidden bg-[#F7F2EC] sm:h-72 lg:h-auto lg:min-h-0">
           <div className="hidden px-12 pt-10 lg:block xl:px-16">
-            <p className="font-serif text-base italic text-[#FF7B29]">
+            <p className="font-serif text-base italic text-brand-800">
               Open your store today
             </p>
             <h2 className="mt-1 max-w-lg text-4xl font-extrabold leading-[1.1] tracking-tight text-gray-900 xl:text-5xl">
@@ -161,7 +161,7 @@ export default function SignupPage() {
                   key={p}
                   className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 ring-1 ring-black/5"
                 >
-                  <LuCheck className="text-[#4CAF50]" aria-hidden /> {p}
+                  <LuCheck className="text-leaf-700" aria-hidden /> {p}
                 </li>
               ))}
             </ul>
@@ -175,7 +175,7 @@ export default function SignupPage() {
               style={{ "--tilt": "-4deg" }}
               aria-hidden
             >
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#4CAF50] text-white">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-leaf-700 text-white">
                 <LuStore size={18} />
               </span>
               <span className="leading-tight">
@@ -192,7 +192,7 @@ export default function SignupPage() {
               style={{ "--tilt": "4deg", animationDelay: "-2.5s" }}
               aria-hidden
             >
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#FFF1E6] text-[#FF7B29]">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-50 text-brand-800">
                 <LuGift size={18} />
               </span>
               <span className="leading-tight">
@@ -273,7 +273,7 @@ export default function SignupPage() {
                   key={p}
                   className="flex items-center gap-2 text-sm text-gray-700"
                 >
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-[#E8F5E9] text-[#4CAF50]">
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-leaf-50 text-leaf-700">
                     <LuCheck size={12} aria-hidden />
                   </span>
                   {p}
@@ -346,7 +346,7 @@ export default function SignupPage() {
               Already have an account?{" "}
               <Link
                 to="/login"
-                className="font-bold text-[#FF7B29] hover:underline"
+                className="font-bold text-brand-800 hover:underline"
               >
                 Sign in
               </Link>
@@ -441,7 +441,7 @@ function AccountSetupScreen({ created, onDone }) {
         >
           <span className="relative mx-auto grid h-16 w-16 place-items-center">
             {allDone ? (
-              <span className="grid h-16 w-16 place-items-center rounded-full bg-[#4CAF50] text-white shadow-md">
+              <span className="grid h-16 w-16 place-items-center rounded-full bg-leaf-700 text-white shadow-md">
                 <LuCheck size={30} aria-hidden />
               </span>
             ) : (
@@ -450,7 +450,7 @@ function AccountSetupScreen({ created, onDone }) {
                   className="sb-setup-spin absolute inset-0 rounded-full border-4 border-[#FFE3CF] border-t-[#FF7B29]"
                   aria-hidden
                 />
-                <LuStore size={24} className="text-[#FF7B29]" aria-hidden />
+                <LuStore size={24} className="text-brand-800" aria-hidden />
               </>
             )}
           </span>
@@ -480,7 +480,7 @@ function AccountSetupScreen({ created, onDone }) {
                   <span
                     className={`grid h-6 w-6 shrink-0 place-items-center rounded-full ${
                       done
-                        ? "bg-[#4CAF50] text-white"
+                        ? "bg-leaf-700 text-white"
                         : current
                           ? "border-2 border-[#FF7B29]"
                           : "border-2 border-gray-200"
@@ -497,7 +497,7 @@ function AccountSetupScreen({ created, onDone }) {
                       done
                         ? "font-semibold text-gray-900"
                         : current
-                          ? "font-semibold text-[#FF7B29]"
+                          ? "font-semibold text-brand-800"
                           : "text-gray-400"
                     }
                   >
@@ -593,7 +593,7 @@ function SignupSuccess({ created, onContinue, nextPath, hasPlan }) {
             aria-live="polite"
             className="rounded-2xl bg-white p-6 shadow-[0_22px_40px_-24px_rgba(0,0,0,0.35)] ring-1 ring-black/5 sm:p-8"
           >
-            <span className="grid h-14 w-14 place-items-center rounded-full bg-[#4CAF50] text-white shadow-md">
+            <span className="grid h-14 w-14 place-items-center rounded-full bg-leaf-700 text-white shadow-md">
               <LuCheck size={28} aria-hidden />
             </span>
             <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
@@ -634,7 +634,7 @@ function SignupSuccess({ created, onContinue, nextPath, hasPlan }) {
                     onClick={() => onContinue(path)}
                     className="flex w-full items-start gap-3 rounded-xl border border-gray-200 p-3.5 text-left transition hover:border-[#FF7B29] hover:bg-[#FFF1E6]/50"
                   >
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#FFF1E6] text-xs font-extrabold text-[#FF7B29]">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-extrabold text-brand-800">
                       {i + 1}
                     </span>
                     <span className="flex-1 text-sm">
@@ -656,7 +656,7 @@ function SignupSuccess({ created, onContinue, nextPath, hasPlan }) {
               <button
                 type="button"
                 onClick={() => onContinue(nextPath)}
-                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-md bg-[#FF7B29] text-sm font-bold text-white transition hover:bg-[#e96a1b]"
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-md bg-brand text-sm font-bold text-ink transition hover:bg-brand-600"
               >
                 {hasPlan ? "Continue to choose your plan" : "Go to my counter"}
                 <LuArrowRight aria-hidden />
@@ -664,7 +664,7 @@ function SignupSuccess({ created, onContinue, nextPath, hasPlan }) {
               <button
                 type="button"
                 onClick={() => onContinue("/app/inventory")}
-                className="flex h-12 flex-1 items-center justify-center rounded-md border-2 border-[#FF7B29] text-sm font-bold text-[#FF7B29] transition hover:bg-[#FF7B29] hover:text-white"
+                className="flex h-12 flex-1 items-center justify-center rounded-md border-2 border-brand text-sm font-bold text-brand-800 transition hover:bg-brand hover:text-ink"
               >
                 Add stock first
               </button>

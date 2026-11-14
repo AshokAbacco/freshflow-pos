@@ -237,7 +237,7 @@ function Eyebrow({ children, center = false, light = false }) {
   return (
     <p
       className={`flex items-center gap-2 font-serif text-sm font-semibold italic ${
-        light ? "text-[#FFB27D]" : "text-[#FF7B29]"
+        light ? "text-[#FFB27D]" : "text-brand-800"
       } ${center ? "justify-center" : ""}`}
     >
       {children}
@@ -330,7 +330,7 @@ function Hero() {
           <div className="mt-7 flex flex-wrap gap-3">
             <Link
               to="/signup"
-              className="inline-flex items-center gap-3 rounded-md bg-[#FF7B29] px-5 py-2.5 text-white shadow-lg shadow-orange-500/20 transition hover:bg-[#f06a17]"
+              className="inline-flex items-center gap-3 rounded-md bg-brand px-5 py-2.5 text-ink shadow-lg shadow-brand/25 transition hover:bg-brand-600"
             >
               <LuPlay size={20} aria-hidden />
               <span className="flex flex-col leading-tight">
@@ -412,7 +412,7 @@ function PromoCards() {
           </p>
           <Link
             to="/features"
-            className="mt-4 flex w-fit items-center gap-1.5 rounded bg-[#FF7B29] px-4 py-2 text-xs font-bold hover:bg-[#f06a17]"
+            className="mt-4 flex w-fit items-center gap-1.5 rounded bg-brand px-4 py-2 text-xs font-bold text-ink hover:bg-brand-600"
           >
             Learn more <LuArrowRight aria-hidden />
           </Link>
@@ -436,7 +436,7 @@ function PromoCards() {
           </h3>
           <Link
             to="/pricing"
-            className="mt-4 flex w-fit items-center gap-1.5 rounded bg-[#4CAF50] px-4 py-2 text-xs font-bold text-white hover:bg-[#43a047]"
+            className="mt-4 flex w-fit items-center gap-1.5 rounded bg-leaf-700 px-4 py-2 text-xs font-bold text-white hover:bg-leaf-800"
           >
             See pricing <LuArrowRight aria-hidden />
           </Link>
@@ -453,7 +453,7 @@ function PromoCards() {
 
 function CircleBadge() {
   return (
-    <div className="absolute -right-2 top-4 grid h-28 w-28 place-items-center rounded-full bg-[#FF7B29] text-white shadow-lg sm:right-2">
+    <div className="absolute -right-2 top-4 grid h-28 w-28 place-items-center rounded-full bg-brand text-ink shadow-lg sm:right-2">
       <svg
         viewBox="0 0 100 100"
         className="sb-spin absolute inset-0 h-full w-full"
@@ -465,7 +465,7 @@ function CircleBadge() {
             d="M50,50 m-38,0 a38,38 0 1,1 76,0 a38,38 0 1,1 -76,0"
           />
         </defs>
-        <text fill="white" fontSize="9" fontWeight="700" letterSpacing="1.5">
+        <text fill="#17120E" fontSize="9" fontWeight="700" letterSpacing="1.5">
           <textPath href="#sb-circle">
             MADE FOR KIRANA • MADE FOR SUPERMARKETS •
           </textPath>
@@ -491,7 +491,7 @@ function About() {
           />
         </div>
         <CircleBadge />
-        <blockquote className="absolute -bottom-6 right-0 max-w-[260px] rounded-lg bg-[#4CAF50] p-5 text-white shadow-xl sm:-right-4">
+        <blockquote className="absolute -bottom-6 right-0 max-w-[260px] rounded-lg bg-leaf-700 p-5 text-white shadow-xl sm:-right-4">
           <p className="font-serif text-base italic leading-snug">
             “Every sale, return and delivery moves stock, and leaves a record.”
           </p>
@@ -528,7 +528,7 @@ function About() {
               key={title}
               className="rounded-lg bg-white p-5 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.15)] ring-1 ring-black/5"
             >
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-[#E8F5E9] text-[#4CAF50]">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-leaf-50 text-leaf-700">
                 <Icon size={20} aria-hidden />
               </span>
               <h3 className="mt-3 font-bold text-gray-900">{title}</h3>
@@ -575,7 +575,7 @@ function Categories() {
             </ul>
             <Link
               to="/features"
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-gray-900 group-hover:text-[#4CAF50]"
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-gray-900 group-hover:text-leaf-700"
             >
               Explore more <LuArrowRight aria-hidden />
             </Link>
@@ -613,7 +613,7 @@ function BestFeature() {
           </p>
           <Link
             to="/signup"
-            className="mt-5 inline-flex items-center gap-1.5 rounded bg-[#FF7B29] px-4 py-2 text-xs font-bold hover:bg-[#f06a17]"
+            className="mt-5 inline-flex items-center gap-1.5 rounded bg-brand px-4 py-2 text-xs font-bold text-ink hover:bg-brand-600"
           >
             Try it free <LuArrowRight aria-hidden />
           </Link>
@@ -656,7 +656,7 @@ function Products() {
             className="sb-reveal group relative rounded-lg bg-white p-4 text-center shadow-[0_10px_30px_-12px_rgba(0,0,0,0.15)] ring-1 ring-black/5 transition hover:-translate-y-1"
             style={{ "--d": `${i * 90}ms` }}
           >
-            <span className="absolute left-3 top-3 z-10 rounded bg-[#FF7B29] px-1.5 py-0.5 text-[10px] font-bold text-white">
+            <span className="absolute left-3 top-3 z-10 rounded bg-brand px-1.5 py-0.5 text-[10px] font-bold text-ink">
               Code {p.code}
             </span>
             <div className="mx-auto aspect-square w-full max-w-[160px] overflow-hidden rounded-md">
@@ -668,16 +668,16 @@ function Products() {
             </div>
             <h3 className="mt-3 text-sm font-bold text-gray-900">{p.name}</h3>
             <p className="text-xs text-gray-500">{p.desc}</p>
-            <p className="mt-1 font-extrabold text-[#FF7B29]">{p.price}</p>
+            <p className="mt-1 font-extrabold text-brand-700">{p.price}</p>
           </div>
         ))}
       </div>
       <p className="mt-8 text-center">
         <Link
           to="/features"
-          className="inline-flex items-center gap-2 text-sm font-bold text-gray-900 hover:text-[#4CAF50]"
+          className="inline-flex items-center gap-2 text-sm font-bold text-gray-900 hover:text-leaf-700"
         >
-          <span className="grid h-6 w-6 place-items-center rounded-full bg-[#4CAF50] text-white">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-leaf-700 text-white">
             <LuArrowRight size={14} aria-hidden />
           </span>
           See how billing works
@@ -706,7 +706,7 @@ function Discount() {
         <div data-reveal className="sb-reveal">
           <Eyebrow>Launch offer</Eyebrow>
           <h2 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight text-gray-900 sm:text-4xl">
-            Special <span className="text-[#FF7B29]">Discount For All</span>
+            Special <span className="text-brand-700">Discount For All</span>
             <br />
             Grocery Stores
           </h2>
@@ -733,7 +733,7 @@ function Discount() {
           </div>
           <Link
             to="/pricing"
-            className="mt-6 inline-flex items-center gap-1.5 rounded bg-[#4CAF50] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#43a047]"
+            className="mt-6 inline-flex items-center gap-1.5 rounded bg-leaf-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-leaf-800"
           >
             See plans <LuArrowRight aria-hidden />
           </Link>
@@ -753,7 +753,7 @@ function Discount() {
               />
             </div>
           ))}
-          <div className="absolute left-1/2 top-1/2 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#FF7B29] text-center text-[11px] font-extrabold leading-tight text-white shadow-lg">
+          <div className="absolute left-1/2 top-1/2 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand text-center text-[11px] font-extrabold leading-tight text-ink shadow-lg">
             Launch
             <br />
             price
@@ -812,7 +812,7 @@ function SpecialOffer() {
             />
             <button
               type="submit"
-              className="bg-[#FF7B29] px-4 text-xs font-bold text-white hover:bg-[#f06a17]"
+              className="bg-brand px-4 text-xs font-bold text-ink hover:bg-brand-600"
             >
               Start
             </button>
@@ -834,7 +834,7 @@ function SpecialOffer() {
                 onClick={() => setTab(t)}
                 className={`text-sm font-semibold transition ${
                   tab === t
-                    ? "text-[#FF7B29] underline decoration-2 underline-offset-8"
+                    ? "text-brand-800 underline decoration-2 underline-offset-8"
                     : "text-gray-700 hover:text-gray-900"
                 }`}
               >
@@ -857,7 +857,7 @@ function SpecialOffer() {
               <div className="min-w-0">
                 <p className="truncate font-bold text-gray-900">{p.name}</p>
                 <p className="text-xs text-gray-500">{p.desc}</p>
-                <p className="mt-1 text-sm font-extrabold text-[#FF7B29]">
+                <p className="mt-1 text-sm font-extrabold text-brand-800">
                   {p.price}
                 </p>
                 <p className="text-xs font-semibold text-gray-700">
@@ -887,7 +887,7 @@ function SupportTeam() {
           </p>
           <Link
             to="/services"
-            className="mt-5 inline-flex items-center gap-1.5 rounded bg-[#FF7B29] px-4 py-2 text-xs font-bold text-white hover:bg-[#f06a17]"
+            className="mt-5 inline-flex items-center gap-1.5 rounded bg-brand px-4 py-2 text-xs font-bold text-ink hover:bg-brand-600"
           >
             <LuHeadphones aria-hidden /> Our services
           </Link>
@@ -900,7 +900,7 @@ function SupportTeam() {
               className="sb-reveal rounded-lg bg-white p-6 text-center shadow-[0_10px_30px_-12px_rgba(0,0,0,0.15)] ring-1 ring-black/5"
               style={{ "--d": `${i * 100}ms` }}
             >
-              <span className="mx-auto grid h-20 w-20 place-items-center rounded-full border-4 border-[#E8F5E9] bg-[#4CAF50] text-white">
+              <span className="mx-auto grid h-20 w-20 place-items-center rounded-full border-4 border-leaf-50 bg-leaf-700 text-white">
                 <Icon size={30} aria-hidden />
               </span>
               <h3 className="mt-4 font-bold text-gray-900">{title}</h3>

@@ -21,7 +21,7 @@ export function SeatStepper({
           type="button"
           onClick={() => onChange(Math.max(min, seats - 1))}
           disabled={seats <= min}
-          className="grid h-9 w-9 place-items-center rounded-full bg-[#F1ECE4] text-gray-700 transition hover:bg-[#E8E0D4] disabled:opacity-40"
+          className="grid h-11 w-11 place-items-center rounded-full bg-[#F1ECE4] text-gray-700 transition hover:bg-[#E8E0D4] disabled:opacity-40"
           aria-label="One less staff account"
         >
           <LuMinus aria-hidden />
@@ -34,14 +34,14 @@ export function SeatStepper({
             const n = Number(e.target.value.replace(/\D/g, ""));
             onChange(Math.max(min, Math.min(max, n || min)));
           }}
-          className="h-9 w-14 rounded-lg border border-gray-200 text-center font-extrabold tabular focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          className="h-11 w-14 rounded-lg border border-gray-200 text-center font-extrabold tabular focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
           aria-label="Number of staff accounts"
         />
         <button
           type="button"
           onClick={() => onChange(Math.min(max, seats + 1))}
           disabled={seats >= max}
-          className="grid h-9 w-9 place-items-center rounded-full bg-brand text-white transition hover:bg-brand-700 disabled:opacity-40"
+          className="grid h-11 w-11 place-items-center rounded-full bg-brand text-ink transition hover:bg-brand-600 disabled:opacity-40"
           aria-label="One more staff account"
         >
           <LuPlus aria-hidden />
@@ -80,7 +80,7 @@ export function PlanCard({
           {plan.name}
         </h2>
         {highlight ? (
-          <span className="rounded bg-[#FF7B29] px-2 py-0.5 text-[11px] font-bold text-white">
+          <span className="rounded bg-brand px-2 py-0.5 text-[11px] font-bold text-ink">
             Most popular
           </span>
         ) : null}
@@ -93,7 +93,7 @@ export function PlanCard({
       <p className="mt-1 text-desc text-slate-500">{plan.blurb}</p>
 
       <div className="mt-4 flex items-end gap-2">
-        <span className="text-4xl font-extrabold tracking-tight text-[#FF7B29] tabular">
+        <span className="text-4xl font-extrabold tracking-tight text-brand-700 tabular">
           {formatMoney(rate.price, currency)}
         </span>
         <span className="pb-0.5 text-desc text-slate-500">
@@ -118,7 +118,7 @@ export function PlanCard({
           </span>
         </div>
         {saving > 0 ? (
-          <p className="mt-1 text-desc font-semibold text-brand-700 tabular">
+          <p className="mt-1 text-desc font-semibold text-brand-800 tabular">
             You save {formatMoney(saving, currency)}
           </p>
         ) : null}
@@ -127,7 +127,7 @@ export function PlanCard({
       <ul className="mt-4 flex-1 space-y-2">
         {plan.features.map((f) => (
           <li key={f} className="flex gap-2 text-body text-slate-700">
-            <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-50 text-brand">
+            <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-800">
               <LuCheck size={12} aria-hidden />
             </span>
             {f}

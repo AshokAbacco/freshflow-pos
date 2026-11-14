@@ -1,7 +1,7 @@
 import {
   LuPause,
   LuPercent,
-  LuShoppingBasket,
+  LuScanBarcode,
   LuTrash2,
   LuX,
 } from "react-icons/lu";
@@ -13,6 +13,13 @@ import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/States";
 import { CartLine } from "./CartLine";
 
+const SHORTCUTS = [
+  ["F2", "search"],
+  ["F4", "hold"],
+  ["F8", "pay"],
+  ["F9", "held"],
+];
+
 export function CartPanel({ onCheckout, onHold, onDiscount, inSheet = false }) {
   const { lines, billDiscount, bill, itemCount, currency } = useBill();
   const { setQuantity, removeLine, clear, setBillDiscount, lastAddedLineId } =
@@ -20,29 +27,24 @@ export function CartPanel({ onCheckout, onHold, onDiscount, inSheet = false }) {
 
   const increment = (line) => setQuantity(line.lineId, line.quantity + 1);
   const decrement = (line) => setQuantity(line.lineId, line.quantity - 1);
+  const savings = bill.itemDiscount + bill.billDiscount;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       <header
-        className={`flex items-center gap-2 ${inSheet ? "pb-2" : "px-5 pb-3 pt-5"}`}
+        className={`flex items-center gap-2 border-b border-surface-line ${inSheet ? "pb-3" : "px-4 py-3"}`}
       >
-        {inSheet ? (
-          <p className="flex-1 text-desc text-slate-500">
+        <div className="min-w-0 flex-1">
+          {/* The bottom sheet already carries this title, so it is not repeated inside. */}
+          {!inSheet ? (
+            <h2 className="text-h2 font-extrabold text-ink">Current bill</h2>
+          ) : null}
+          <p className="text-desc text-ink-muted tabular">
             {itemCount} item{itemCount === 1 ? "" : "s"}
           </p>
-        ) : (
-          <div className="min-w-0 flex-1">
-            <p className="font-serif text-desc font-semibold italic text-[#FF7B29]">
-              Current bill
-            </p>
-            <h2 className="font-extrabold text-gray-900">Items on this bill</h2>
-            <p className="text-desc text-slate-500">
-              {itemCount} item{itemCount === 1 ? "" : "s"}
-            </p>
-          </div>
-        )}
+        </div>
         <Button
-          variant="soft"
+          variant="secondary"
           size="sm"
           onClick={onHold}
           disabled={!lines.length}
@@ -54,18 +56,18 @@ export function CartPanel({ onCheckout, onHold, onDiscount, inSheet = false }) {
           size="iconSm"
           onClick={clear}
           disabled={!lines.length}
-          aria-label="Clear bill"
-          title="Clear bill"
+          aria-label="Clear the bill"
+          title="Clear the bill"
         >
           <LuTrash2 aria-hidden />
         </Button>
       </header>
 
       <div
-        className={`scroll-thin min-h-0 flex-1 overflow-y-auto ${inSheet ? "" : "px-3"}`}
+        className={`scroll-thin min-h-0 flex-1 overflow-y-auto ${inSheet ? "-mx-5" : ""}`}
       >
         {lines.length ? (
-          <ul className="space-y-1 pb-2">
+          <ul>
             {lines.map((line, i) => (
               <CartLine
                 key={line.lineId}
@@ -81,42 +83,44 @@ export function CartPanel({ onCheckout, onHold, onDiscount, inSheet = false }) {
           </ul>
         ) : (
           <EmptyState
-            icon={LuShoppingBasket}
-            title="No items yet"
-            description="Scan a barcode, type a product code, or tap a product to start the bill."
+            icon={LuScanBarcode}
+            title="Scan to start"
+            description="Scan a barcode, type a product code, or tap a product."
           />
         )}
       </div>
 
       <footer
-        className={`space-y-3 border-t-2 border-dashed border-gray-200 pt-3 ${inSheet ? "pb-1" : "bg-[#FBFAF8] px-5 pb-5"}`}
+        className={`border-t border-surface-line ${inSheet ? "pt-3" : "bg-surface px-4 py-3"}`}
       >
         {bill.billDiscount > 0 ? (
-          <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
-            <LuPercent className="shrink-0 text-brand" aria-hidden />
+          <div className="mb-2 flex items-center gap-2 rounded-lg bg-brand-50 px-2 py-1.5">
+            <LuPercent
+              className="shrink-0 text-brand-800"
+              size={14}
+              aria-hidden
+            />
             <button
               type="button"
               onClick={onDiscount}
               className="min-w-0 flex-1 text-left"
             >
-              <p className="truncate text-desc font-semibold text-brand-800">
+              <span className="block truncate text-desc font-bold text-brand-800">
                 {billDiscount.type === "PERCENT"
-                  ? `${billDiscount.value}% bill discount`
+                  ? `${billDiscount.value}% off the bill`
                   : `${formatMoney(billDiscount.value, currency)} off the bill`}
-              </p>
-              {billDiscount.reason ? (
-                <p className="truncate text-desc text-brand-700/80">
-                  {billDiscount.reason}
-                </p>
-              ) : null}
+                {billDiscount.reason ? (
+                  <span className="font-normal"> · {billDiscount.reason}</span>
+                ) : null}
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setBillDiscount({ value: 0 })}
-              className="grid h-7 w-7 place-items-center rounded-full text-brand-700 hover:bg-brand-100"
-              aria-label="Remove bill discount"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-brand-800 hover:bg-brand-100"
+              aria-label="Remove the bill discount"
             >
-              <LuX aria-hidden />
+              <LuX size={14} aria-hidden />
             </button>
           </div>
         ) : (
@@ -124,63 +128,54 @@ export function CartPanel({ onCheckout, onHold, onDiscount, inSheet = false }) {
             type="button"
             onClick={onDiscount}
             disabled={!lines.length}
-            className="inline-flex items-center gap-1.5 text-desc font-bold text-[#FF7B29] hover:text-[#E0661A] disabled:text-slate-300"
+            className="mb-2 inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-desc font-bold text-brand-800 transition hover:bg-brand-50 disabled:text-ink-faint disabled:hover:bg-transparent"
           >
-            <LuPercent aria-hidden /> Add bill discount
+            <LuPercent size={14} aria-hidden /> Add a bill discount
           </button>
         )}
 
-        <dl className="space-y-1 text-body tabular">
-          <div className="flex justify-between text-slate-600">
+        <dl className="space-y-0.5 text-desc tabular">
+          <div className="flex justify-between text-ink-muted">
             <dt>Subtotal</dt>
             <dd>{formatMoney(fromPaise(bill.subtotal), currency)}</dd>
           </div>
-          {bill.itemDiscount > 0 ? (
-            <div className="flex justify-between text-brand-700">
-              <dt>Markdowns</dt>
-              <dd>−{formatMoney(fromPaise(bill.itemDiscount), currency)}</dd>
+          {savings > 0 ? (
+            <div className="flex justify-between font-semibold text-brand-800">
+              <dt>You saved</dt>
+              <dd>−{formatMoney(fromPaise(savings), currency)}</dd>
             </div>
           ) : null}
-          {bill.billDiscount > 0 ? (
-            <div className="flex justify-between text-brand-700">
-              <dt>Bill discount</dt>
-              <dd>−{formatMoney(fromPaise(bill.billDiscount), currency)}</dd>
-            </div>
-          ) : null}
-          <div className="flex justify-between text-slate-600">
+          <div className="flex justify-between text-ink-muted">
             <dt>GST {bill.taxRate}%</dt>
             <dd>{formatMoney(fromPaise(bill.taxTotal), currency)}</dd>
           </div>
         </dl>
 
-        <div className="flex items-center gap-4 pt-1">
-          <div className="min-w-0">
-            <p className="text-desc text-slate-500">Total price</p>
-            <p className="truncate text-h1 font-extrabold text-gray-900 tabular">
-              {formatMoney(fromPaise(bill.grandTotal), currency)}
-            </p>
-          </div>
-          <Button
-            size="lg"
-            className="flex-1"
-            onClick={onCheckout}
-            disabled={!lines.length}
-          >
-            Checkout
-          </Button>
+        {/* The number the cashier reads out and the customer checks. Nothing on screen beats it. */}
+        <div className="mt-2 flex items-baseline justify-between gap-3 border-t-2 border-ink/10 pt-2">
+          <span className="text-h2 font-bold text-ink-soft">Total</span>
+          <span className="truncate text-num-xl font-extrabold text-ink tabular">
+            {formatMoney(fromPaise(bill.grandTotal), currency)}
+          </span>
         </div>
+
+        <Button
+          size="lg"
+          className="mt-2.5 w-full justify-between"
+          onClick={onCheckout}
+          disabled={!lines.length}
+        >
+          <span>Checkout</span>
+          <span className="hidden rounded-md bg-ink/10 px-1.5 py-0.5 text-desc font-bold lg:inline">
+            F8
+          </span>
+        </Button>
+
         {!inSheet ? (
-          <p className="hidden flex-wrap justify-center gap-x-3 gap-y-1 text-desc text-slate-500 lg:flex">
-            {[
-              ["F2", "search"],
-              ["F4", "hold"],
-              ["F8", "checkout"],
-              ["F9", "held bills"],
-            ].map(([key, label]) => (
-              <span key={key} className="inline-flex items-center gap-1">
-                <kbd className="rounded bg-white px-1.5 py-0.5 font-sans text-[11px] font-bold text-gray-700 ring-1 ring-black/10">
-                  {key}
-                </kbd>
+          <p className="mt-2.5 hidden flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-desc text-ink-muted lg:flex">
+            {SHORTCUTS.map(([key, label]) => (
+              <span key={key} className="inline-flex items-center gap-1.5">
+                <kbd className="kbd">{key}</kbd>
                 {label}
               </span>
             ))}

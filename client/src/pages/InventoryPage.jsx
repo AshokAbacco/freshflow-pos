@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   LuLayers,
   LuPackagePlus,
+  LuScanBarcode,
   LuPencil,
   LuSearch,
   LuBoxes,
@@ -11,18 +12,26 @@ import { SyncPill } from "../components/layout/AppShell";
 import { CategoryManager } from "../components/admin/CategoryManager";
 import { ProductForm } from "../components/admin/ProductForm";
 import { StockAdjustModal } from "../components/admin/StockAdjustModal";
+import { ScannerSetupModal } from "../components/hardware/ScannerSetupModal";
 import { Button } from "../components/ui/Button";
 import { Pagination } from "../components/ui/Pagination";
 import { Segmented } from "../components/ui/Segmented";
 import { EmptyState, ErrorState, Spinner } from "../components/ui/States";
 import { useApiQuery } from "../hooks/useApiQuery";
+import { useBarcodeScanner } from "../hooks/useBarcodeScanner";
 import { useDebounce } from "../hooks/useDebounce";
 import { formatMoney, formatNumber } from "../lib/format";
 import { useCatalogStore } from "../store/catalogStore";
+import { toast } from "../store/toastStore";
 
 export default function InventoryPage() {
   const { openSync } = useOutletContext();
-  const { categories, settings, load: reloadCatalog } = useCatalogStore();
+  const {
+    categories,
+    settings,
+    load: reloadCatalog,
+    lookupScan,
+  } = useCatalogStore();
   const currency = settings?.currency || "INR";
 
   const [search, setSearch] = useState("");
@@ -44,6 +53,50 @@ export default function InventoryPage() {
   const [creating, setCreating] = useState(false);
   const [adjusting, setAdjusting] = useState(null);
   const [managingCategories, setManagingCategories] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  /** A scanned code with no product behind it, offered to the add-product form. */
+  const [unknownScan, setUnknownScan] = useState(null);
+
+  /*
+   * The barcode index lives in the catalog store, which this page otherwise has no reason to
+   * load -- its rows come from /products, one page at a time. Loading it here is what lets a
+   * scan resolve a product that is not on the page currently shown. It is cached in
+   * IndexedDB, so this is close to free after the first visit.
+   */
+  useEffect(() => {
+    reloadCatalog({ silent: true });
+  }, [reloadCatalog]);
+
+  /*
+   * Scanning on this screen is for taking stock in: scan a box, the product's stock dialog
+   * opens straight away. That is the whole job, so it should not need a search and two clicks.
+   * A code with no product behind it is the other half of stock entry -- new line, never
+   * stocked before -- so it offers to create it rather than just reporting a miss.
+   */
+  useBarcodeScanner(
+    (code) => {
+      const hit = lookupScan(code);
+      if (hit) {
+        setUnknownScan(null);
+        setAdjusting(hit.product);
+        return;
+      }
+      setAdjusting(null);
+      setUnknownScan(code);
+      setSearch(code);
+      setPage(1);
+      toast.info(`No product has the barcode ${code} yet`);
+    },
+    // While a dialog is open it owns the scanner, so a scan does not reshuffle the page behind it.
+    {
+      enabled:
+        !adjusting &&
+        !editing &&
+        !creating &&
+        !managingCategories &&
+        !showScanner,
+    },
+  );
 
   const refresh = () => {
     refetch();
@@ -80,7 +133,37 @@ export default function InventoryPage() {
             <LuPackagePlus aria-hidden />{" "}
             <span className="hidden sm:inline">Add product</span>
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowScanner(true)}
+            title="Barcode scanner"
+            aria-label="Barcode scanner settings"
+          >
+            <LuScanBarcode aria-hidden />
+            <span className="hidden lg:inline">Scanner</span>
+          </Button>
         </div>
+
+        {unknownScan ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-brand-50 px-3 py-2.5">
+            <LuScanBarcode className="shrink-0 text-brand-700" aria-hidden />
+            <p className="min-w-0 flex-1 text-desc text-slate-700">
+              Scanned <span className="font-mono font-bold">{unknownScan}</span>
+              , which no product has yet.
+            </p>
+            <Button size="sm" onClick={() => setCreating(true)}>
+              Add this product
+            </Button>
+            <button
+              type="button"
+              onClick={() => setUnknownScan(null)}
+              className="text-desc font-semibold text-slate-500 hover:text-slate-800"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="relative min-w-[190px] flex-1">
@@ -333,8 +416,15 @@ export default function InventoryPage() {
         open={creating}
         product={null}
         categories={categories}
-        onClose={() => setCreating(false)}
-        onSaved={refresh}
+        initialBarcode={unknownScan ?? ""}
+        onClose={() => {
+          setCreating(false);
+          setUnknownScan(null);
+        }}
+        onSaved={() => {
+          setUnknownScan(null);
+          refresh();
+        }}
       />
       <ProductForm
         open={Boolean(editing)}
@@ -347,6 +437,10 @@ export default function InventoryPage() {
         product={adjusting}
         onClose={() => setAdjusting(null)}
         onSaved={refresh}
+      />
+      <ScannerSetupModal
+        open={showScanner}
+        onClose={() => setShowScanner(false)}
       />
       <CategoryManager
         open={managingCategories}

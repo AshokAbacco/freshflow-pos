@@ -38,6 +38,32 @@ function validTimezone(tz) {
 const nodeEnv = process.env.NODE_ENV || "development";
 const jwtSecret = required("JWT_SECRET");
 
+/*
+ * Platform tokens are signed with their own secret. Sharing one secret with the store app
+ * would mean a leaked store token could be re-signed as a platform token, so in production
+ * this must be set and must differ from JWT_SECRET.
+ */
+const platformJwtSecret =
+  process.env.PLATFORM_JWT_SECRET ||
+  (nodeEnv === "production"
+    ? required("PLATFORM_JWT_SECRET")
+    : `${jwtSecret}::platform-dev-only`);
+
+if (nodeEnv === "production") {
+  if (platformJwtSecret.length < 32) {
+    throw new Error(
+      "PLATFORM_JWT_SECRET must be at least 32 characters in production. " +
+        "Generate one with: node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"",
+    );
+  }
+  if (platformJwtSecret === jwtSecret) {
+    throw new Error(
+      "PLATFORM_JWT_SECRET must not be the same as JWT_SECRET: the platform panel and the " +
+        "store app must not accept each other's tokens.",
+    );
+  }
+}
+
 if (nodeEnv === "production" && jwtSecret.length < 32) {
   throw new Error("JWT_SECRET must be at least 32 characters in production");
 }
@@ -153,6 +179,13 @@ export const env = Object.freeze({
   dbPoolMax: Number(process.env.DB_POOL_MAX || 10),
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "12h",
+  platformJwtSecret,
+  /// Short-lived access token; the session row is what actually allows a sign-out to bite
+  platformJwtExpiresIn: process.env.PLATFORM_JWT_EXPIRES_IN || "30m",
+  platformSessionDays: Number(process.env.PLATFORM_SESSION_DAYS || 7),
+  /// Failed sign-ins before a platform account is locked, and for how long
+  platformMaxFailedLogins: Number(process.env.PLATFORM_MAX_FAILED_LOGINS || 5),
+  platformLockMinutes: Number(process.env.PLATFORM_LOCK_MINUTES || 15),
   corsOrigins: (process.env.CORS_ORIGIN || "http://localhost:5173")
     .split(",")
     .map((s) => s.trim())

@@ -1,26 +1,32 @@
 import { forwardRef } from "react";
 import { LuLoaderCircle } from "react-icons/lu";
 
+/*
+ * Filled orange carries an ink label, not white: white on #FF7B29 is 2.59:1 and unreadable
+ * under the strip lighting most registers sit under. Ink on the same orange is 7.19:1.
+ */
 const VARIANTS = {
   primary:
-    "bg-brand text-white shadow-md shadow-brand/25 hover:bg-brand-700 active:bg-brand-800 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none",
+    "bg-brand text-ink hover:bg-brand-600 active:bg-brand-700 active:text-white disabled:bg-surface-sunk disabled:text-ink-faint",
   secondary:
-    "bg-white text-gray-900 border border-gray-200 hover:border-brand/50 hover:bg-[#FBFAF8] active:bg-slate-100 disabled:text-slate-400",
-  soft: "bg-brand-50 text-brand-700 hover:bg-brand-100 active:bg-brand-200 disabled:bg-slate-100 disabled:text-slate-400",
+    "bg-white text-ink-soft border border-surface-line hover:bg-surface-sunk active:bg-surface-line disabled:text-ink-faint",
+  soft: "bg-brand-50 text-brand-800 hover:bg-brand-100 active:bg-brand-200 disabled:bg-surface-sunk disabled:text-ink-faint",
   ghost:
-    "bg-transparent text-slate-600 hover:bg-slate-100 active:bg-slate-200 disabled:text-slate-300",
+    "bg-transparent text-ink-muted hover:bg-surface-sunk active:bg-surface-line disabled:text-ink-faint",
+  dark: "bg-ink text-white hover:bg-ink-soft active:bg-black disabled:bg-surface-sunk disabled:text-ink-faint",
   danger:
-    "bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400",
+    "bg-stock-out text-white hover:bg-[#9A1C12] active:bg-[#7F1710] disabled:bg-surface-sunk disabled:text-ink-faint",
   dangerSoft:
-    "bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:text-slate-400",
+    "bg-stock-outBg text-stock-out hover:bg-[#FDE3E0] disabled:text-ink-faint",
 };
 
+/* Nothing a finger has to hit during a sale is under 44px. */
 const SIZES = {
-  sm: "h-8 px-3 gap-1.5 text-desc",
-  md: "h-10 px-4 gap-2 text-body",
-  lg: "h-12 px-6 gap-2 text-h2",
-  icon: "h-10 w-10 justify-center",
-  iconSm: "h-8 w-8 justify-center",
+  sm: "h-10 px-3.5 gap-1.5 text-body",
+  md: "h-tap px-4 gap-2 text-body",
+  lg: "h-14 px-6 gap-2 text-h2",
+  icon: "h-tap w-tap justify-center",
+  iconSm: "h-10 w-10 justify-center",
 };
 
 export const Button = forwardRef(function Button(
@@ -41,7 +47,7 @@ export const Button = forwardRef(function Button(
       ref={ref}
       type={type}
       disabled={disabled || loading}
-      className={`inline-flex shrink-0 select-none items-center justify-center rounded-lg font-bold transition disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={`inline-flex shrink-0 select-none items-center justify-center rounded-xl font-bold transition-colors disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
       {...props}
     >
       {loading ? <LuLoaderCircle className="animate-spin" aria-hidden /> : null}

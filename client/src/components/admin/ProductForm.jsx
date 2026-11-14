@@ -21,7 +21,14 @@ const BLANK = {
   isActive: true,
 };
 
-export function ProductForm({ open, product, categories, onClose, onSaved }) {
+export function ProductForm({
+  open,
+  product,
+  categories,
+  onClose,
+  onSaved,
+  initialBarcode = "",
+}) {
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -51,9 +58,9 @@ export function ProductForm({ open, product, categories, onClose, onSaved }) {
             imageUrl: product.imageUrl ?? "",
             isActive: product.isActive,
           }
-        : BLANK,
+        : { ...BLANK, barcode: initialBarcode },
     );
-  }, [open, product]);
+  }, [open, product, initialBarcode]);
 
   const set = (key) => (e) =>
     setForm((f) => ({

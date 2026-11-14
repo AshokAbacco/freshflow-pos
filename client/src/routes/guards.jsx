@@ -1,11 +1,18 @@
-import { Link, Navigate, Outlet, useLocation, useOutletContext } from 'react-router-dom';
-import { LuShieldAlert } from 'react-icons/lu';
-import { useAuthStore } from '../store/authStore';
+import {
+  Link,
+  Navigate,
+  Outlet,
+  useLocation,
+  useOutletContext,
+} from "react-router-dom";
+import { LuShieldAlert } from "react-icons/lu";
+import { useAuthStore } from "../store/authStore";
 
 export function RequireAuth({ children }) {
   const token = useAuthStore((s) => s.token);
   const location = useLocation();
-  if (!token) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!token)
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return children;
 }
 
@@ -22,10 +29,14 @@ export function RequireRole({ roles }) {
             <LuShieldAlert size={22} aria-hidden />
           </div>
           <h1>This area is for store admins</h1>
-          <p className="mt-2 text-desc text-slate-500">
-            Reports, analytics, inventory and settings need an admin account. You can keep selling from the register.
+          <p className="mt-2 text-desc text-ink-muted">
+            Reports, analytics, inventory and settings need an admin account.
+            You can keep selling from the register.
           </p>
-          <Link to="/app" className="mt-5 inline-flex h-10 items-center rounded-full bg-brand px-5 font-semibold text-white hover:bg-brand-700">
+          <Link
+            to="/app"
+            className="mt-5 inline-flex h-11 items-center rounded-xl bg-brand px-5 font-bold text-ink hover:bg-brand-600"
+          >
             Back to register
           </Link>
         </div>

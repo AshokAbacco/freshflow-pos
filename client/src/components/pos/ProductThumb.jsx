@@ -5,7 +5,7 @@ export function ProductThumb({ src, name, className = "" }) {
   if (!src || failed) {
     return (
       <div
-        className={`grid h-full w-full place-items-center bg-gradient-to-br from-brand-50 to-[#FFF1E6] text-h1 font-extrabold text-brand-700 ${className}`}
+        className={`grid h-full w-full place-items-center bg-surface-sunk text-h2 font-extrabold text-ink-faint ${className}`}
         aria-hidden
       >
         {name?.[0]?.toUpperCase() ?? "?"}
@@ -19,7 +19,7 @@ export function ProductThumb({ src, name, className = "" }) {
       loading="lazy"
       decoding="async"
       onError={() => setFailed(true)}
-      className={`h-full w-full object-cover mix-blend-multiply ${className}`}
+      className={`h-full w-full object-cover ${className}`}
     />
   );
 }

@@ -16,6 +16,7 @@ import { PaymentModal } from "../components/pos/PaymentModal";
 import { ProductCard } from "../components/pos/ProductCard";
 import { ReceiptModal } from "../components/pos/ReceiptModal";
 import { ScaleModal } from "../components/pos/ScaleModal";
+import { ScannerSetupModal } from "../components/hardware/ScannerSetupModal";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { EmptyState, ErrorState, Spinner } from "../components/ui/States";
@@ -65,6 +66,7 @@ export default function PosPage() {
     error,
     load,
     lookup,
+    lookupScan,
     applySale,
   } = useCatalogStore();
   const { lines, billDiscount, bill, itemCount, currency } = useBill();
@@ -84,6 +86,7 @@ export default function PosPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
   const [showHeld, setShowHeld] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -109,20 +112,25 @@ export default function PosPage() {
 
   const addByCode = useCallback(
     (code) => {
-      const product = lookup(code);
-      if (!product) {
+      const hit = lookupScan(code);
+      if (!hit) {
         beep(320);
         toast.error(`No product matches “${code}”`);
         return;
       }
       setQuery("");
-      select(product);
+      select(hit.product);
     },
-    [lookup, select],
+    [lookupScan, select],
   );
 
+  /*
+   * While the scanner setup dialog is open, scans belong to it: the point of that screen is to
+   * try the scanner and read back what it sent. Without `!showScanner` here, every test scan
+   * also rang the product up on the bill behind the dialog.
+   */
   useBarcodeScanner(addByCode, {
-    enabled: !receipt && !showPayment && !scaleProduct,
+    enabled: !receipt && !showPayment && !scaleProduct && !showScanner,
   });
 
   useHotkeys(
@@ -131,6 +139,7 @@ export default function PosPage() {
       F4: () =>
         lines.length && holdCurrent().then(() => toast.info("Bill parked")),
       F8: () => lines.length && setShowPayment(true),
+      F7: () => setShowScanner(true),
       F9: () => setShowHeld(true),
     },
     !receipt,
@@ -234,6 +243,16 @@ export default function PosPage() {
               </p>
             </div>
             <SyncPill onClick={openSync} />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowScanner(true)}
+              title="Barcode scanner (F7)"
+              aria-label="Barcode scanner settings"
+            >
+              <LuScanBarcode aria-hidden />
+              <span className="hidden lg:inline">Scanner</span>
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -444,6 +463,11 @@ export default function PosPage() {
         onClose={() => setShowHeld(false)}
         taxRate={Number(settings?.taxRate ?? 0)}
         currency={currency}
+      />
+
+      <ScannerSetupModal
+        open={showScanner}
+        onClose={() => setShowScanner(false)}
       />
 
       <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />

@@ -115,7 +115,7 @@ export default function PricingPage() {
                 <button
                   type="button"
                   onClick={() => navigate("/signup")}
-                  className="relative mt-7 inline-flex h-12 items-center justify-center gap-1.5 rounded bg-[#FF7B29] text-sm font-bold hover:bg-[#f06a17]"
+                  className="relative mt-7 inline-flex h-12 items-center justify-center gap-1.5 rounded bg-brand text-sm font-bold text-ink hover:bg-brand-600"
                 >
                   Start free <LuArrowRight aria-hidden />
                 </button>
@@ -179,7 +179,7 @@ export default function PricingPage() {
             >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold text-gray-900 [&::-webkit-details-marker]:hidden">
                 {q}
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#E8F5E9] text-[#4CAF50] transition group-open:rotate-45 group-open:bg-[#4CAF50] group-open:text-white">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-leaf-50 text-leaf-700 transition group-open:rotate-45 group-open:bg-leaf-700 group-open:text-white">
                   <LuPlus aria-hidden />
                 </span>
               </summary>

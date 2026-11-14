@@ -23,7 +23,7 @@ export function HeldBillsModal({ open, onClose, taxRate, currency }) {
           description="Park a bill when a customer steps away, then pick it up again here."
         />
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-surface-line">
           {heldBills.map((bill) => {
             const total = computeBill({
               items: bill.lines,
@@ -33,25 +33,25 @@ export function HeldBillsModal({ open, onClose, taxRate, currency }) {
             return (
               <li key={bill.id} className="flex items-center gap-3 py-3">
                 <span
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-800"
                   aria-hidden
                 >
                   <LuLayers />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-gray-900">
+                  <p className="truncate text-body font-bold text-ink">
                     {bill.label}
                   </p>
-                  <p className="truncate text-desc text-slate-500">
+                  <p className="truncate text-desc text-ink-muted">
                     {bill.lines.length} item{bill.lines.length === 1 ? "" : "s"}
                     , {relativeTime(bill.heldAt)}
                   </p>
-                  <p className="text-body font-extrabold text-[#FF7B29] tabular">
+                  <p className="text-num font-extrabold text-ink tabular">
                     {formatMoney(fromPaise(total.grandTotal), currency)}
                   </p>
                 </div>
                 <Button
-                  size="sm"
+                  size="md"
                   onClick={async () => {
                     await resumeHeld(bill.id);
                     onClose();
@@ -60,7 +60,7 @@ export function HeldBillsModal({ open, onClose, taxRate, currency }) {
                   Resume
                 </Button>
                 <Button
-                  size="iconSm"
+                  size="icon"
                   variant="ghost"
                   aria-label={`Discard ${bill.label}`}
                   onClick={() => discardHeld(bill.id)}
