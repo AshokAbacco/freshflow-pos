@@ -87,7 +87,9 @@ export default function PlatformLoginPage() {
               <h1 className="text-h2 font-extrabold tracking-tight text-white">
                 Platform admin
               </h1>
-              <p className="text-desc text-white/50">FreshFlow back office</p>
+              <p className="text-desc text-white/50">
+                Super Market back office
+              </p>
             </div>
           </div>
 

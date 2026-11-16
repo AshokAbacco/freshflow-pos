@@ -74,7 +74,7 @@ export default function PlatformResetPage() {
             <p className="text-body font-extrabold text-white">
               Platform admin
             </p>
-            <p className="text-desc text-white/40">FreshFlow back office</p>
+            <p className="text-desc text-white/40">Super Market back office</p>
           </div>
         </div>
 

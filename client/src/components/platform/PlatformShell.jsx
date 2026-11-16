@@ -92,7 +92,7 @@ export function PlatformShell() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-body font-extrabold leading-tight">Platform admin</p>
-          <p className="truncate text-desc text-white/40">FreshFlow back office</p>
+          <p className="truncate text-desc text-white/40">Super Market back office</p>
         </div>
         <button
           type="button"
