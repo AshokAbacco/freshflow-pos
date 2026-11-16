@@ -11,19 +11,23 @@
  * Limits are null for unlimited, not a large number. "Unlimited bills" and "a million bills"
  * are different promises, and only one of them is what the pricing page says.
  */
-import { Router } from 'express';
-import { z } from 'zod';
-import { prisma } from '../../lib/prisma.js';
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "../../lib/prisma.js";
 import {
   PLATFORM_ROLES,
   authenticatePlatform,
   rejectStoreToken,
   requirePlatformRole,
   requireReason,
-} from '../../middleware/platform-auth.js';
-import { validate } from '../../middleware/validate.js';
-import { AUDIT, writeAudit } from '../../services/audit.service.js';
-import { HttpError } from '../../utils/http.js';
+} from "../../middleware/platform-auth.js";
+import { validate } from "../../middleware/validate.js";
+import { AUDIT, writeAudit } from "../../services/audit.service.js";
+import {
+  getPlans,
+  invalidatePlanCache,
+} from "../../services/plan-catalogue.service.js";
+import { HttpError } from "../../utils/http.js";
 
 const router = Router();
 router.use(rejectStoreToken, authenticatePlatform);
@@ -60,27 +64,86 @@ const shape = (p, inUse = 0) => ({
 /** Subscription.plan is the PlanTier enum, which matches Plan.code for the seeded plans. */
 async function usageByCode() {
   const rows = await prisma.subscription.groupBy({
-    by: ['plan'],
+    by: ["plan"],
     _count: { plan: true },
     where: { cancelledAt: null },
   });
   return Object.fromEntries(rows.map((r) => [r.plan, r._count.plan]));
 }
 
-router.get('/', async (_req, res, next) => {
+router.get("/", async (_req, res, next) => {
   try {
-    const [plans, inUse] = await Promise.all([
-      prisma.plan.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
-      usageByCode(),
-    ]);
-    return res.json({ plans: plans.map((p) => shape(p, inUse[p.code] ?? 0)) });
+    /*
+     * A missing or empty plans table is a pending migration, not an error. Report it as such
+     * with the fallback catalogue, so the page explains itself instead of showing nothing and
+     * leaving the reader to guess.
+     */
+    let rows = [];
+    let notice = null;
+    try {
+      rows = await prisma.plan.findMany({
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      });
+      if (!rows.length) {
+        notice =
+          "No plans are stored yet, so the prices below come from config/plans.js. Run the database migration to manage them here.";
+      }
+    } catch (err) {
+      if (
+        !/P2021|does not exist|undefined/i.test(err.code || err.message || "")
+      )
+        throw err;
+      notice =
+        "The plans table does not exist yet. Run `npx prisma migrate deploy` and `npx prisma generate`, then reload. Until then the prices below come from config/plans.js.";
+    }
+
+    const inUse = await usageByCode();
+
+    if (rows.length) {
+      return res.json({
+        plans: rows.map((p) => shape(p, inUse[p.code] ?? 0)),
+        source: "database",
+      });
+    }
+
+    /*
+     * Read-only view of the fallback. getPlans, not publicCatalogue: the admin manages every
+     * plan including the trial, which is deliberately not on the public pricing page. Filtering
+     * to sellable plans here hid the trial from the only screen that is meant to show it.
+     */
+    const { plans: all } = await getPlans({ fresh: true });
+    return res.json({
+      source: "fallback",
+      notice,
+      plans: all.map((p) => ({
+        id: null,
+        code: p.code,
+        name: p.name,
+        blurb: p.blurb,
+        isActive: p.isActive,
+        isPublic: p.isPublic,
+        sortOrder: 0,
+        limits: p.limits,
+        features: p.features,
+        pricing: { monthly: p.intervals.MONTHLY, yearly: p.intervals.YEARLY },
+        currency: p.currency,
+        retiredAt: null,
+        createdAt: null,
+        storesOnPlan: inUse[p.code] ?? 0,
+        editable: false,
+      })),
+    });
   } catch (err) {
     return next(err);
   }
 });
 
 const planBody = z.object({
-  code: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,29}$/, 'Use capitals, digits and underscores').optional(),
+  code: z
+    .string()
+    .trim()
+    .regex(/^[A-Z][A-Z0-9_]{1,29}$/, "Use capitals, digits and underscores")
+    .optional(),
   name: z.string().trim().min(2).max(80),
   blurb: z.string().trim().max(400).nullable().optional(),
   isPublic: z.boolean().optional(),
@@ -89,8 +152,20 @@ const planBody = z.object({
   limits: z
     .object({
       users: z.coerce.number().int().min(1).max(100000).nullable().optional(),
-      products: z.coerce.number().int().min(1).max(10000000).nullable().optional(),
-      billsPerMonth: z.coerce.number().int().min(1).max(10000000).nullable().optional(),
+      products: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(10000000)
+        .nullable()
+        .optional(),
+      billsPerMonth: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(10000000)
+        .nullable()
+        .optional(),
     })
     .optional(),
   features: z.array(z.string().trim().max(200)).max(30).optional(),
@@ -121,9 +196,11 @@ function toColumns(body) {
   if (body.currency !== undefined) data.currency = body.currency.toUpperCase();
 
   if (body.limits) {
-    if ('users' in body.limits) data.maxUsers = body.limits.users ?? null;
-    if ('products' in body.limits) data.maxProducts = body.limits.products ?? null;
-    if ('billsPerMonth' in body.limits) data.maxBillsPerMonth = body.limits.billsPerMonth ?? null;
+    if ("users" in body.limits) data.maxUsers = body.limits.users ?? null;
+    if ("products" in body.limits)
+      data.maxProducts = body.limits.products ?? null;
+    if ("billsPerMonth" in body.limits)
+      data.maxBillsPerMonth = body.limits.billsPerMonth ?? null;
   }
   if (body.pricing) {
     data.monthlyListPrice = body.pricing.monthly.listPrice;
@@ -135,23 +212,29 @@ function toColumns(body) {
 }
 
 router.post(
-  '/',
+  "/",
   requirePlatformRole(SUPER),
   validate({ body: planBody }),
   async (req, res, next) => {
     try {
-      if (!req.body.code) throw new HttpError(400, 'A plan needs a code', 'CODE_REQUIRED');
-      const existing = await prisma.plan.findUnique({ where: { code: req.body.code } });
-      if (existing) throw new HttpError(409, 'A plan already uses that code', 'CODE_TAKEN');
+      if (!req.body.code)
+        throw new HttpError(400, "A plan needs a code", "CODE_REQUIRED");
+      const existing = await prisma.plan.findUnique({
+        where: { code: req.body.code },
+      });
+      if (existing)
+        throw new HttpError(409, "A plan already uses that code", "CODE_TAKEN");
 
       const plan = await prisma.plan.create({
         data: { code: req.body.code, ...toColumns(req.body) },
       });
 
+      invalidatePlanCache();
+
       await writeAudit({
         req,
         action: AUDIT.PLAN_CREATED,
-        targetType: 'plan',
+        targetType: "plan",
         targetId: plan.id,
         reason: `Created plan ${plan.code}`,
         changes: { code: plan.code, name: plan.name },
@@ -165,38 +248,49 @@ router.post(
 );
 
 router.patch(
-  '/:id',
+  "/:id",
   requirePlatformRole(SUPER),
   validate({ body: planBody.partial({ name: true }) }),
   async (req, res, next) => {
     try {
-      const plan = await prisma.plan.findUnique({ where: { id: req.params.id } });
-      if (!plan) throw new HttpError(404, 'No plan with that id', 'NOT_FOUND');
+      const plan = await prisma.plan.findUnique({
+        where: { id: req.params.id },
+      });
+      if (!plan) throw new HttpError(404, "No plan with that id", "NOT_FOUND");
 
       // The code is how subscriptions point at this plan; changing it would detach them.
       if (req.body.code && req.body.code !== plan.code) {
         throw new HttpError(
           409,
-          'A plan code cannot change once stores are on it. Retire this plan and create a new one.',
-          'CODE_IMMUTABLE',
+          "A plan code cannot change once stores are on it. Retire this plan and create a new one.",
+          "CODE_IMMUTABLE",
         );
       }
 
       const data = toColumns(req.body);
-      if (!Object.keys(data).length) throw new HttpError(400, 'Nothing to change', 'NO_CHANGE');
+      if (!Object.keys(data).length)
+        throw new HttpError(400, "Nothing to change", "NO_CHANGE");
 
-      const updated = await prisma.plan.update({ where: { id: plan.id }, data });
+      const updated = await prisma.plan.update({
+        where: { id: plan.id },
+        data,
+      });
+
+      invalidatePlanCache();
 
       await writeAudit({
         req,
         action: AUDIT.PLAN_UPDATED,
-        targetType: 'plan',
+        targetType: "plan",
         targetId: plan.id,
         reason: `Updated plan ${plan.code}`,
         changes: {
           priceFrom: num(plan.monthlyPrice),
           priceTo: num(updated.monthlyPrice),
-          name: plan.name !== updated.name ? { from: plan.name, to: updated.name } : undefined,
+          name:
+            plan.name !== updated.name
+              ? { from: plan.name, to: updated.name }
+              : undefined,
         },
       });
 
@@ -212,21 +306,29 @@ router.patch(
  * required because it changes what the business sells.
  */
 router.post(
-  '/:id/retire',
+  "/:id/retire",
   requirePlatformRole(SUPER),
   requireReason,
-  validate({ body: z.object({ retired: z.boolean().optional(), reason: z.string() }) }),
+  validate({
+    body: z.object({ retired: z.boolean().optional(), reason: z.string() }),
+  }),
   async (req, res, next) => {
     try {
-      const plan = await prisma.plan.findUnique({ where: { id: req.params.id } });
-      if (!plan) throw new HttpError(404, 'No plan with that id', 'NOT_FOUND');
+      const plan = await prisma.plan.findUnique({
+        where: { id: req.params.id },
+      });
+      if (!plan) throw new HttpError(404, "No plan with that id", "NOT_FOUND");
 
       const retire = req.body.retired !== false;
       if (retire && plan.retiredAt) {
-        throw new HttpError(409, 'That plan is already retired', 'ALREADY_RETIRED');
+        throw new HttpError(
+          409,
+          "That plan is already retired",
+          "ALREADY_RETIRED",
+        );
       }
       if (!retire && !plan.retiredAt) {
-        throw new HttpError(409, 'That plan is not retired', 'NOT_RETIRED');
+        throw new HttpError(409, "That plan is not retired", "NOT_RETIRED");
       }
 
       const inUse = (await usageByCode())[plan.code] ?? 0;
@@ -240,10 +342,12 @@ router.post(
         },
       });
 
+      invalidatePlanCache();
+
       await writeAudit({
         req,
         action: AUDIT.PLAN_RETIRED,
-        targetType: 'plan',
+        targetType: "plan",
         targetId: plan.id,
         changes: { code: plan.code, retired: retire, storesStillOnIt: inUse },
       });

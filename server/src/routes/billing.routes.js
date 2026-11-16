@@ -41,37 +41,31 @@ webhookRouter.post(
       console.error(
         "[billing] Webhook received but RAZORPAY_WEBHOOK_SECRET is not set; ignoring.",
       );
-      return res
-        .status(503)
-        .json({
-          error: {
-            code: "WEBHOOK_NOT_CONFIGURED",
-            message: "Webhooks are not configured",
-          },
-        });
+      return res.status(503).json({
+        error: {
+          code: "WEBHOOK_NOT_CONFIGURED",
+          message: "Webhooks are not configured",
+        },
+      });
     }
 
     const signature = req.get("x-razorpay-signature");
     if (!verifyWebhookSignature(req.body, signature)) {
-      return res
-        .status(400)
-        .json({
-          error: {
-            code: "INVALID_SIGNATURE",
-            message: "Signature check failed",
-          },
-        });
+      return res.status(400).json({
+        error: {
+          code: "INVALID_SIGNATURE",
+          message: "Signature check failed",
+        },
+      });
     }
 
     let event;
     try {
       event = JSON.parse(req.body.toString("utf8"));
     } catch {
-      return res
-        .status(400)
-        .json({
-          error: { code: "INVALID_JSON", message: "Body is not valid JSON" },
-        });
+      return res.status(400).json({
+        error: { code: "INVALID_JSON", message: "Body is not valid JSON" },
+      });
     }
 
     const payment = event?.payload?.payment?.entity ?? null;
@@ -338,9 +332,13 @@ router.get(
   }),
 );
 
-router.get("/quote", validate({ query: planSchema }), (req, res) => {
-  res.json({ quote: quote(req.query) });
-});
+router.get(
+  "/quote",
+  validate({ query: planSchema }),
+  asyncHandler(async (req, res) => {
+    res.json({ quote: await quoteFor(req.query) });
+  }),
+);
 
 /*
  * An order Razorpay never charged against stays CREATED forever, because nothing happened to it:

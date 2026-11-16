@@ -615,6 +615,13 @@ model PlatformMessage {
   audience       Json                       @default("{}")
   channel        String                     @default("IN_APP")
   status         String                     @default("DRAFT")
+  /// BROADCAST for a campaign, DIRECT for an answer to one shop. Keeps a reply out of the
+  /// broadcast list, where it would look like a campaign sent to a single store.
+  kind           String                     @default("BROADCAST")
+  /// The store message this answers, when it is an answer. SetNull so deleting the question
+  /// never deletes the reply, which is part of the support record.
+  inReplyToId    String?                    @map("in_reply_to_id")
+  inReplyTo      StoreMessageReply?         @relation("ReplyThread", fields: [inReplyToId], references: [id], onDelete: SetNull)
   createdById    String?                    @map("created_by_id")
   createdByLabel String                     @default("system") @map("created_by_label")
   sentAt         DateTime?                  @map("sent_at")
@@ -622,9 +629,11 @@ model PlatformMessage {
   updatedAt      DateTime                   @updatedAt @map("updated_at")
 
   recipients     PlatformMessageRecipient[]
-  replies        StoreMessageReply[]
+  replies        StoreMessageReply[]        @relation("MessageReplies")
 
   @@index([status, createdAt])
+  @@index([kind, createdAt])
+  @@index([inReplyToId])
   @@map("platform_messages")
 }
 
@@ -648,7 +657,7 @@ model StoreMessageReply {
   /// Null when a store starts a thread itself. SetNull rather than Cascade so deleting a
   /// campaign never deletes the replies it provoked.
   messageId      String?          @map("message_id")
-  message        PlatformMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  message        PlatformMessage? @relation("MessageReplies", fields: [messageId], references: [id], onDelete: SetNull)
   organizationId String           @map("organization_id")
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String?          @map("user_id")
@@ -657,6 +666,9 @@ model StoreMessageReply {
   handledAt      DateTime?        @map("handled_at")
   handledById    String?          @map("handled_by_id")
   createdAt      DateTime         @default(now()) @map("created_at")
+
+  /// Answers the platform sent about this message.
+  answers        PlatformMessage[] @relation("ReplyThread")
 
   @@index([handledAt, createdAt])
   @@index([organizationId, createdAt])

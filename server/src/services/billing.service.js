@@ -9,6 +9,8 @@ import {
   TRIAL_DAYS,
   TRIAL_SEATS,
 } from "../config/plans.js";
+import { getPlans, quoteFor } from "./plan-catalogue.service.js";
+import { evaluateEntitlement } from "./entitlement.service.js";
 import { prisma } from "../lib/prisma.js";
 import { invalidateOrganizationCache } from "../middleware/auth.js";
 import { HttpError } from "../utils/http.js";
@@ -152,13 +154,19 @@ export function trialSubscriptionData() {
 }
 
 /** True while the organization may keep using the app. */
+/**
+ * Can this store still add data?
+ *
+ * Delegates to the one entitlement rule so the billing banner agrees with what the till
+ * actually does. Its own shorter test said "lapsed = finished", which contradicted both the
+ * grace period and the platform panel, and missed a suspension recorded only as a timestamp.
+ *
+ * Synchronous, so it uses the built-in grace default rather than the configured one. The
+ * authoritative gate is requireActiveSubscription, which reads the platform setting; this is
+ * for display, where being a day out in an unusual case is far better than blocking a sale.
+ */
 export function subscriptionActive(subscription) {
-  if (!subscription) return false;
-  if (!["TRIALING", "ACTIVE", "PAST_DUE"].includes(subscription.status))
-    return false;
-  const until = subscription.currentPeriodEnd ?? subscription.trialEndsAt;
-  if (!until) return false;
-  return new Date(until).getTime() > Date.now();
+  return evaluateEntitlement(null, subscription, new Date()).canWrite;
 }
 
 export function describeSubscription(subscription, seatsUsed) {
@@ -232,7 +240,9 @@ export async function createOrder({ organizationId, plan, interval, seats }) {
     );
   }
 
-  const priced = quote({ plan, interval, seats });
+  // The amount the customer is charged, from the live catalogue rather than the hardcoded
+  // file, so a price edited in the admin panel is the price actually taken.
+  const priced = await quoteFor({ plan, interval, seats });
 
   const order = await razorpayFetch("/orders", {
     method: "POST",
@@ -341,6 +351,17 @@ async function applyPayment({
   razorpayPayment,
   organizationId,
 }) {
+  /*
+   * The catalogue is read before the transaction opens, not inside it. A query on the global
+   * client from within a $transaction borrows a second pooled connection while still holding
+   * the first, which is how a busy checkout exhausts the pool and deadlocks. It is usually a
+   * cache hit anyway.
+   */
+  const catalogue = await getPlans();
+  const priceFromCatalogue = (plan, interval) =>
+    catalogue.plans.find((p) => p.code === plan)?.intervals?.[interval]
+      ?.price ?? 0;
+
   return prisma.$transaction(async (db) => {
     const payment = await db.payment.findUnique({ where: { razorpayOrderId } });
     if (!payment)
@@ -395,7 +416,8 @@ async function applyPayment({
     const periodEnd = new Date(base);
     periodEnd.setMonth(periodEnd.getMonth() + months);
 
-    const pricePerUser = PLANS[payment.plan].intervals[payment.interval].price;
+    // Same source as the order, so the stored rate matches what was actually charged.
+    const pricePerUser = priceFromCatalogue(payment.plan, payment.interval);
     const subscription = await db.subscription.update({
       where: { organizationId: payment.organizationId },
       data: {

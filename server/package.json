@@ -17,14 +17,16 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.js",
     "db:seed:stress": "node prisma/stress-seed.js",
-    "test": "node --test --experimental-test-module-mocks tests/pricing.test.js tests/billing.test.js tests/entitlement.test.js tests/phone.test.js tests/barcode.test.js tests/platform-stores.routes.test.js tests/platform-search.routes.test.js tests/platform-sections.routes.test.js tests/platform-admin.routes.test.js",
+    "test": "node --test --experimental-test-module-mocks tests/pricing.test.js tests/billing.test.js tests/entitlement.test.js tests/phone.test.js tests/barcode.test.js tests/platform-stores.routes.test.js tests/platform-search.routes.test.js tests/platform-sections.routes.test.js tests/platform-admin.routes.test.js tests/notifications.routes.test.js tests/daily-followups.job.test.js",
     "test:db": "node --test tests/entitlement-sql.test.js tests/store-directory.test.js tests/reports-sql.test.js",
     "test:payments": "node tests/payment-flow.e2e.mjs",
     "mock:razorpay": "node dev/mock-razorpay.mjs",
     "test:failures": "node tests/failure-status.e2e.mjs",
     "check:prod": "node scripts/check-production.mjs",
     "admin:set": "node scripts/admin-set.mjs",
-    "test:unit": "node --test tests/pricing.test.js tests/entitlement.test.js tests/phone.test.js tests/barcode.test.js"
+    "test:unit": "node --test tests/pricing.test.js tests/entitlement.test.js tests/phone.test.js tests/barcode.test.js",
+    "job:followups": "node src/jobs/daily-followups.job.js",
+    "db:check": "node scripts/check-migration-state.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

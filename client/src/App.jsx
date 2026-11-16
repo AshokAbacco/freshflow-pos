@@ -22,6 +22,7 @@ const ReportsPage = lazy(() => import("./pages/ReportsPage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const BillingPage = lazy(() => import("./pages/BillingPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 
 /*
  * The platform back office. Loaded on demand so a cashier's till never downloads it, and kept
@@ -30,6 +31,9 @@ const BillingPage = lazy(() => import("./pages/BillingPage"));
  */
 const PlatformLoginPage = lazy(
   () => import("./pages/platform/PlatformLoginPage"),
+);
+const PlatformResetPage = lazy(
+  () => import("./pages/platform/PlatformResetPage"),
 );
 const PlatformShell = lazy(() =>
   import("./components/platform/PlatformShell").then((m) => ({
@@ -116,6 +120,12 @@ export default function App() {
           }
         >
           <Route index element={<PosPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          {/* The page was called Messages before it carried plan alerts too. */}
+          <Route
+            path="messages"
+            element={<Navigate to="/app/notifications" replace />}
+          />
 
           <Route element={<RequireRole roles={["ADMIN"]} />}>
             <Route path="reports" element={<ReportsPage />} />
@@ -131,6 +141,16 @@ export default function App() {
           element={
             <Suspense fallback={<PlatformLoading />}>
               <PlatformLoginPage />
+            </Suspense>
+          }
+        />
+        {/* Where invite and password-reset links land. Without it the catch-all below
+            bounced them to the store app and an invited colleague had no way in. */}
+        <Route
+          path="/platform/reset"
+          element={
+            <Suspense fallback={<PlatformLoading />}>
+              <PlatformResetPage />
             </Suspense>
           }
         />

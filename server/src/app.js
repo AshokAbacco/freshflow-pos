@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes, { webhookRouter } from "./routes/billing.routes.js";
 import publicRoutes from "./routes/public.routes.js";
+import notificationRoutes from "./routes/notifications.routes.js";
 import platformAccountRoutes from "./routes/platform/account.routes.js";
 import platformAuditRoutes from "./routes/platform/audit.routes.js";
 import platformAuthRoutes from "./routes/platform/auth.routes.js";
@@ -101,6 +102,8 @@ export function createApp() {
   api.use("/transactions", transactionRoutes);
   api.use("/reports", reportRoutes);
   api.use("/users", userRoutes);
+  // Where platform messages actually reach the shop.
+  api.use("/notifications", notificationRoutes);
 
   /*
    * The platform panel is a separate API surface under its own version prefix. It does NOT

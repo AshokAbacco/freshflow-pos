@@ -10,6 +10,7 @@ import {
   LuMail,
   LuPhone,
   LuPin,
+  LuPlus,
   LuRefreshCw,
   LuTags,
   LuTrash2,
@@ -60,6 +61,15 @@ export default function PlatformStoreDetailPage() {
   const [action, setAction] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
+  // Raising a chase from the store you are already looking at, which is where the thought
+  // usually occurs -- not after navigating away to the follow-ups list.
+  const [chaseOpen, setChaseOpen] = useState(false);
+  const [chase, setChase] = useState({
+    title: "",
+    dueInDays: 3,
+    priority: "NORMAL",
+  });
+  const [chaseBusy, setChaseBusy] = useState(false);
 
   const isSuper = admin?.role === "SUPER_ADMIN";
   const seesMoney = admin?.role !== "SUPPORT";
@@ -110,6 +120,31 @@ export default function PlatformStoreDetailPage() {
       setError(platformErrorMessage(err, "The note was not saved."));
     } finally {
       setNoteBusy(false);
+    }
+  };
+
+  const addFollowUp = async (event) => {
+    event.preventDefault();
+    if (chase.title.trim().length < 3) return;
+    setChaseBusy(true);
+    setError(null);
+    try {
+      await platformApi.post("/follow-ups", {
+        organizationId: id,
+        title: chase.title.trim(),
+        type: "SUPPORT_ISSUE",
+        priority: chase.priority,
+        dueAt: new Date(
+          Date.now() + Number(chase.dueInDays) * 86400000,
+        ).toISOString(),
+      });
+      setChase({ title: "", dueInDays: 3, priority: "NORMAL" });
+      setChaseOpen(false);
+      await load();
+    } catch (err) {
+      setError(platformErrorMessage(err, "That follow-up was not saved."));
+    } finally {
+      setChaseBusy(false);
     }
   };
 
@@ -469,6 +504,78 @@ export default function PlatformStoreDetailPage() {
             <Panel
               title={`Open follow-ups${followUps.length ? ` (${followUps.length})` : ""}`}
             >
+              <button
+                type="button"
+                onClick={() => setChaseOpen((v) => !v)}
+                aria-expanded={chaseOpen}
+                className="mb-2 flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-desc font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                <LuPlus size={13} aria-hidden />
+                Add a follow-up
+              </button>
+
+              {chaseOpen ? (
+                <form
+                  onSubmit={addFollowUp}
+                  className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5"
+                >
+                  <label
+                    htmlFor="chase"
+                    className="text-desc font-semibold text-slate-500"
+                  >
+                    What needs chasing?
+                  </label>
+                  <input
+                    id="chase"
+                    autoFocus
+                    value={chase.title}
+                    onChange={(event) =>
+                      setChase({ ...chase, title: event.target.value })
+                    }
+                    placeholder="e.g. Call back about the second till"
+                    className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-2.5 text-body text-slate-900 placeholder:text-slate-400 focus:border-brand focus:outline-none"
+                  />
+                  <div className="mt-2 flex items-end gap-2">
+                    <label className="flex-1">
+                      <span className="text-desc text-slate-500">
+                        Due in (days)
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="365"
+                        value={chase.dueInDays}
+                        onChange={(event) =>
+                          setChase({ ...chase, dueInDays: event.target.value })
+                        }
+                        className="mt-0.5 h-10 w-full rounded-lg border border-slate-200 px-2 text-body text-slate-900 focus:border-brand focus:outline-none"
+                      />
+                    </label>
+                    <label className="flex-1">
+                      <span className="text-desc text-slate-500">Priority</span>
+                      <select
+                        value={chase.priority}
+                        onChange={(event) =>
+                          setChase({ ...chase, priority: event.target.value })
+                        }
+                        className="mt-0.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-body text-slate-900 focus:border-brand focus:outline-none"
+                      >
+                        <option value="LOW">Low</option>
+                        <option value="NORMAL">Normal</option>
+                        <option value="HIGH">High</option>
+                      </select>
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={chase.title.trim().length < 3 || chaseBusy}
+                      className="h-10 shrink-0 rounded-lg bg-brand px-3 text-desc font-bold text-ink transition hover:bg-brand-700 disabled:opacity-40"
+                    >
+                      {chaseBusy ? "Saving…" : "Add"}
+                    </button>
+                  </div>
+                </form>
+              ) : null}
+
               {followUps.length ? (
                 <ul className="space-y-2">
                   {followUps.map((f) => (

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { LuCheck, LuClock, LuUserPlus } from "react-icons/lu";
+import {
+  LuCheck,
+  LuClock,
+  LuPlus,
+  LuSearch,
+  LuUserPlus,
+  LuX,
+} from "react-icons/lu";
 import {
   Card,
   Chip,
@@ -48,6 +55,18 @@ export default function PlatformFollowUpsPage() {
   // Which row is showing its close form, and what has been typed into it.
   const [closing, setClosing] = useState(null);
   const [closeText, setCloseText] = useState("");
+  // Raising one by hand: the nightly job covers renewals and failed payments, but a phone
+  // call that needs chasing next Tuesday has to be possible to write down.
+  const [adding, setAdding] = useState(false);
+  const [newFollowUp, setNewFollowUp] = useState({
+    title: "",
+    type: "SUPPORT_ISSUE",
+    priority: "NORMAL",
+    dueInDays: 3,
+  });
+  const [storeQuery, setStoreQuery] = useState("");
+  const [storeHits, setStoreHits] = useState([]);
+  const [chosenStore, setChosenStore] = useState(null);
   const [data, setData] = useState(null);
   const [counts, setCounts] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -98,6 +117,63 @@ export default function PlatformFollowUpsPage() {
     [setParams],
   );
 
+  // Finding the store to attach it to, through the search everyone already uses.
+  useEffect(() => {
+    const q = storeQuery.trim();
+    if (!adding || chosenStore || q.length < 2) {
+      setStoreHits([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await platformApi.get("/search", {
+          params: { q },
+          signal: controller.signal,
+        });
+        setStoreHits(response.data.stores ?? []);
+      } catch {
+        // An aborted search is the normal case while typing.
+      }
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [adding, storeQuery, chosenStore]);
+
+  const createFollowUp = async (event) => {
+    event.preventDefault();
+    if (!chosenStore || newFollowUp.title.trim().length < 3) return;
+    setWorking("new");
+    setError(null);
+    try {
+      await platformApi.post("/follow-ups", {
+        organizationId: chosenStore.id,
+        title: newFollowUp.title.trim(),
+        type: newFollowUp.type,
+        priority: newFollowUp.priority,
+        dueAt: new Date(
+          Date.now() + Number(newFollowUp.dueInDays) * 86400000,
+        ).toISOString(),
+      });
+      setAdding(false);
+      setNewFollowUp({
+        title: "",
+        type: "SUPPORT_ISSUE",
+        priority: "NORMAL",
+        dueInDays: 3,
+      });
+      setChosenStore(null);
+      setStoreQuery("");
+      await load();
+    } catch (err) {
+      setError(platformErrorMessage(err, "That follow-up was not saved."));
+    } finally {
+      setWorking(null);
+    }
+  };
+
   const act = async (id, path, body) => {
     setWorking(id);
     setError(null);
@@ -132,8 +208,195 @@ export default function PlatformFollowUpsPage() {
           ? `${counts.open} open · ${counts.overdue} overdue · ${counts.mine} assigned to you`
           : "Loading…"
       }
-      actions={<ReloadButton onClick={load} busy={loading} />}
+      actions={
+        <>
+          <ReloadButton onClick={load} busy={loading} />
+          <button
+            type="button"
+            onClick={() => setAdding((v) => !v)}
+            aria-expanded={adding}
+            className="flex h-10 items-center gap-2 rounded-lg bg-brand px-3 text-body font-bold text-ink transition hover:bg-brand-700"
+          >
+            <LuPlus size={16} aria-hidden />
+            New follow-up
+          </button>
+        </>
+      }
     >
+      {adding ? (
+        <form
+          onSubmit={createFollowUp}
+          className="mt-4 rounded-xl border border-slate-200 bg-white p-4"
+        >
+          <h2 className="text-h2 font-bold text-slate-900">
+            Raise a follow-up
+          </h2>
+          <p className="mt-0.5 text-desc text-slate-500">
+            For something you need to chase that the nightly job would not know
+            about — a promise made on a call, a shop to check back on.
+          </p>
+
+          <div className="mt-3">
+            <span className="text-desc font-semibold text-slate-500">
+              Which store
+            </span>
+            {chosenStore ? (
+              <div className="mt-1 flex items-center gap-2">
+                <span className="flex h-11 flex-1 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-body font-semibold text-slate-900">
+                  {chosenStore.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChosenStore(null);
+                    setStoreQuery("");
+                  }}
+                  className="grid h-11 w-11 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  aria-label="Pick a different store"
+                >
+                  <LuX size={16} aria-hidden />
+                </button>
+              </div>
+            ) : (
+              <div className="relative mt-1">
+                <LuSearch
+                  size={15}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  aria-hidden
+                />
+                <input
+                  type="search"
+                  value={storeQuery}
+                  onChange={(event) => setStoreQuery(event.target.value)}
+                  placeholder="Start typing a store name"
+                  aria-label="Find the store"
+                  className="h-11 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-body text-slate-900 placeholder:text-slate-400 focus:border-brand focus:outline-none"
+                />
+                {storeHits.length ? (
+                  <ul className="absolute left-0 right-0 top-12 z-20 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lift">
+                    {storeHits.map((s) => (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setChosenStore(s);
+                            setStoreHits([]);
+                          }}
+                          className="w-full rounded px-2 py-2 text-left text-body text-slate-800 hover:bg-slate-50"
+                        >
+                          {s.name}
+                          <span className="ml-1 text-desc text-slate-400">
+                            {s.city}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          <label className="mt-3 block">
+            <span className="text-desc font-semibold text-slate-500">
+              What needs doing
+            </span>
+            <input
+              value={newFollowUp.title}
+              onChange={(event) =>
+                setNewFollowUp({ ...newFollowUp, title: event.target.value })
+              }
+              placeholder="e.g. Call back about the second till they asked for"
+              className="mt-1 h-11 w-full rounded-lg border border-slate-200 px-2.5 text-body text-slate-900 placeholder:text-slate-400 focus:border-brand focus:outline-none"
+            />
+          </label>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <label className="block">
+              <span className="text-desc font-semibold text-slate-500">
+                Type
+              </span>
+              <select
+                value={newFollowUp.type}
+                onChange={(event) =>
+                  setNewFollowUp({ ...newFollowUp, type: event.target.value })
+                }
+                className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-2 text-body text-slate-900 focus:border-brand focus:outline-none"
+              >
+                {Object.entries(TYPE_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-desc font-semibold text-slate-500">
+                Priority
+              </span>
+              <select
+                value={newFollowUp.priority}
+                onChange={(event) =>
+                  setNewFollowUp({
+                    ...newFollowUp,
+                    priority: event.target.value,
+                  })
+                }
+                className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-2 text-body text-slate-900 focus:border-brand focus:outline-none"
+              >
+                <option value="LOW">Low</option>
+                <option value="NORMAL">Normal</option>
+                <option value="HIGH">High</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-desc font-semibold text-slate-500">
+                Due in (days)
+              </span>
+              <input
+                type="number"
+                min="0"
+                max="365"
+                value={newFollowUp.dueInDays}
+                onChange={(event) =>
+                  setNewFollowUp({
+                    ...newFollowUp,
+                    dueInDays: event.target.value,
+                  })
+                }
+                className="mt-1 h-11 w-full rounded-lg border border-slate-200 px-2.5 text-body text-slate-900 focus:border-brand focus:outline-none"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-desc text-slate-400">
+              It will be assigned to you.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAdding(false)}
+                className="h-11 rounded-lg border border-slate-200 px-4 text-body font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  !chosenStore ||
+                  newFollowUp.title.trim().length < 3 ||
+                  working === "new"
+                }
+                className="h-11 rounded-lg bg-brand px-4 text-body font-bold text-ink transition hover:bg-brand-700 disabled:opacity-40"
+              >
+                {working === "new" ? "Saving…" : "Raise it"}
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : null}
+
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <SearchBox
           value={draft}
