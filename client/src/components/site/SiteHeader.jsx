@@ -9,6 +9,7 @@ export const SITE_LINKS = [
   { to: "/", label: "Home", end: true },
   { to: "/features", label: "Features" },
   { to: "/services", label: "Services" },
+  { to: "/products", label: "Products" },
   { to: "/pricing", label: "Pricing" },
   { to: "/about", label: "About" },
 ];
