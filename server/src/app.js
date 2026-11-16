@@ -3,14 +3,17 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+
 import { env } from "./config/env.js";
 import { prisma } from "./lib/prisma.js";
 import { authenticate } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
+
 import authRoutes from "./routes/auth.routes.js";
 import billingRoutes, { webhookRouter } from "./routes/billing.routes.js";
 import publicRoutes from "./routes/public.routes.js";
 import notificationRoutes from "./routes/notifications.routes.js";
+
 import platformAccountRoutes from "./routes/platform/account.routes.js";
 import platformAuditRoutes from "./routes/platform/audit.routes.js";
 import platformAuthRoutes from "./routes/platform/auth.routes.js";
@@ -31,6 +34,7 @@ import platformSettingsRoutes, {
 import platformStoreRoutes from "./routes/platform/stores.routes.js";
 import platformTeamRoutes from "./routes/platform/team.routes.js";
 import platformUserRoutes from "./routes/platform/users.routes.js";
+
 import categoryRoutes from "./routes/categories.routes.js";
 import productRoutes from "./routes/products.routes.js";
 import reportRoutes from "./routes/reports.routes.js";
@@ -42,75 +46,150 @@ export function createApp() {
   const app = express();
 
   app.disable("x-powered-by");
-  if (env.trustProxy) app.set("trust proxy", 1);
+
+  if (env.trustProxy) {
+    app.set("trust proxy", 1);
+  }
+
+  // ============================================
+  // CORS CONFIGURATION
+  // ============================================
+
+  const allowedOrigins = [
+    "https://grocery-pos-ui.onrender.com",
+    "https://www.supermarketbilling.com",
+    "https://supermarketbilling.com",
+    ...env.corsOrigins,
+  ];
+
+  const corsOptions = {
+    origin(origin, callback) {
+      // Allow requests without an Origin header:
+      // Postman, curl, server-to-server requests.
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Allow only configured frontend domains.
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, origin);
+      }
+
+      console.warn("CORS BLOCKED ORIGIN:", origin);
+
+      return callback(null, false);
+    },
+
+    // REQUIRED for HTTP-only cookies and refresh tokens.
+    credentials: true,
+
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+      "Accept",
+      "X-Requested-With",
+    ],
+
+    optionsSuccessStatus: 204,
+
+    maxAge: 600,
+  };
+
+  // CORS must be registered before API routes and authentication.
+  // This also handles OPTIONS preflight requests.
+  app.use(cors(corsOptions));
+
+  // ============================================
+  // SECURITY & MIDDLEWARE
+  // ============================================
 
   app.use(helmet());
-  app.use(
-    cors({
-      origin(origin, callback) {
-        // Same-origin requests and non-browser clients send no Origin header.
-        if (!origin || env.corsOrigins.includes(origin))
-          return callback(null, true);
-        return callback(null, false);
-      },
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-      allowedHeaders: ["Authorization", "Content-Type"],
-      maxAge: 600,
-    }),
-  );
+
   app.use(compression());
+
   app.use(morgan(env.isProd ? "combined" : "dev"));
 
-  // The Razorpay webhook is signed over the exact bytes of the request, so it must be
-  // mounted with its own raw-body parser before the JSON parser touches anything.
+  // ============================================
+  // RAZORPAY WEBHOOK
+  // ============================================
+
+  // Webhook requires the original raw request body.
+  // Keep this before express.json().
   app.use("/api/billing", webhookRouter);
+
+  // ============================================
+  // JSON BODY PARSER
+  // ============================================
 
   app.use(express.json({ limit: "1mb" }));
 
+  // ============================================
+  // MAIN API ROUTER
+  // ============================================
+
   const api = express.Router();
 
+  // Health check
   api.get("/health", async (_req, res) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
+
       res.json({
         status: "ok",
         database: "up",
         time: new Date().toISOString(),
       });
-    } catch {
-      res
-        .status(503)
-        .json({
-          status: "degraded",
-          database: "down",
-          time: new Date().toISOString(),
-        });
+    } catch (error) {
+      console.error("Health check failed:", error);
+
+      res.status(503).json({
+        status: "degraded",
+        database: "down",
+        time: new Date().toISOString(),
+      });
     }
   });
 
+  // ============================================
+  // PUBLIC ROUTES
+  // ============================================
+
   api.use("/auth", authRoutes);
-  // Marketing site, pricing and sign-up: no session required.
+
+  // Marketing website, pricing and signup.
   api.use("/public", publicRoutes);
-  // Billing handles its own authentication (the webhook above is public).
+
+  // Billing handles its own authentication.
   api.use("/billing", billingRoutes);
 
-  // Everything below requires a valid session; each router declares which roles may use it.
+  // ============================================
+  // STORE AUTHENTICATION
+  // ============================================
+
+  // Everything below requires a valid store session.
   api.use(authenticate);
+
   api.use("/settings", settingsRoutes);
   api.use("/categories", categoryRoutes);
   api.use("/products", productRoutes);
   api.use("/transactions", transactionRoutes);
   api.use("/reports", reportRoutes);
   api.use("/users", userRoutes);
-  // Where platform messages actually reach the shop.
+
+  // Notifications
   api.use("/notifications", notificationRoutes);
 
-  /*
-   * The platform panel is a separate API surface under its own version prefix. It does NOT
-   * sit behind the store `authenticate` middleware above: platform staff are not store users,
-   * and a store token must never reach these routes.
-   */
+  // ============================================
+  // PLATFORM ADMIN ROUTES
+  // ============================================
+
+  // Platform admin has a separate authentication system.
+  // These routes must NOT use the store authenticate middleware.
+
   const platform = express.Router();
+
   platform.use("/auth", platformAuthRoutes);
   platform.use("/dashboard", platformDashboardRoutes);
   platform.use("/stores", platformStoreRoutes);
@@ -128,10 +207,22 @@ export function createApp() {
   platform.use("/reports", platformReportRoutes);
   platform.use("/settings", platformSettingsRoutes);
   platform.use("/health", platformHealthRoutes);
+
+  // Platform API version prefix.
   app.use("/api/v1/platform", platform);
 
+  // ============================================
+  // MOUNT MAIN API
+  // ============================================
+
   app.use("/api", api);
+
+  // ============================================
+  // ERROR HANDLING
+  // ============================================
+
   app.use(notFoundHandler);
+
   app.use(errorHandler);
 
   return app;
