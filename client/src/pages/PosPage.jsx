@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
+  LuChevronRight,
   LuLayers,
+  LuMenu,
   LuScanBarcode,
   LuSearch,
   LuShoppingBasket,
@@ -33,6 +35,47 @@ import { useCartStore } from "../store/cartStore";
 import { useCatalogStore } from "../store/catalogStore";
 import { toast } from "../store/toastStore";
 
+/*
+ * How much room the bill takes. The till keeps this per device, because it is
+ * a property of the counter rather than of the sale: a wide screen at the
+ * front desk and a small one at the back want different answers, and the
+ * cashier should not have to say so again every morning.
+ *
+ *   hidden  — the bill is off-screen and the products own the width. The
+ *             running total follows on a floating pill so it is never lost.
+ *   compact — the default. Narrower than the old fixed panel.
+ *   wide    — for reading the lines back before taking payment.
+ */
+const BILL_VIEWS = ["hidden", "compact", "wide"];
+const BILL_KEY = "pos.billView";
+
+const readBillView = () => {
+  try {
+    const saved = localStorage.getItem(BILL_KEY);
+    return BILL_VIEWS.includes(saved) ? saved : "compact";
+  } catch {
+    return "compact"; // private mode, or storage disabled
+  }
+};
+
+const BILL_WIDTH = {
+  hidden: "w-0 border-l-0",
+  compact: "w-[300px] border-l",
+  wide: "w-[420px] border-l",
+};
+
+/*
+ * Reclaimed width becomes more products rather than wider ones. Written out in
+ * full because Tailwind reads these class names from the source.
+ */
+const GRID_COLS = {
+  hidden:
+    "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7",
+  compact:
+    "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
+  wide: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+};
+
 function beep(frequency = 1760) {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -54,7 +97,7 @@ function beep(frequency = 1760) {
 }
 
 export default function PosPage() {
-  const { openSync } = useOutletContext();
+  const { openSync, openNav } = useOutletContext();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "ADMIN";
   const {
@@ -89,6 +132,7 @@ export default function PosPage() {
   const [showScanner, setShowScanner] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [billView, setBillView] = useState(readBillView);
   const [submitting, setSubmitting] = useState(false);
   const searchRef = useRef(null);
   const debouncedQuery = useDebounce(query, 150);
@@ -97,6 +141,23 @@ export default function PosPage() {
     load();
     loadHeldBills();
   }, [load, loadHeldBills]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(BILL_KEY, billView);
+    } catch {
+      /* nothing to do: the choice just will not outlive this session */
+    }
+  }, [billView]);
+
+  const showBill = useCallback(
+    () => setBillView((v) => (v === "hidden" ? "compact" : v)),
+    [],
+  );
+  const toggleBill = useCallback(
+    () => setBillView((v) => (v === "hidden" ? "compact" : "hidden")),
+    [],
+  );
 
   const select = useCallback(
     (product) => {
@@ -136,6 +197,7 @@ export default function PosPage() {
   useHotkeys(
     {
       F2: () => searchRef.current?.focus(),
+      F3: toggleBill,
       F4: () =>
         lines.length && holdCurrent().then(() => toast.info("Bill parked")),
       F8: () => lines.length && setShowPayment(true),
@@ -230,6 +292,16 @@ export default function PosPage() {
       <section className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 border-b border-black/5 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl sm:px-6">
           <div className="flex items-center gap-3">
+            {/* The rail and the tab bar are hidden on the till, so this is the way out. */}
+            <Button
+              variant="ghost"
+              size="iconSm"
+              onClick={openNav}
+              aria-label="Open menu"
+              title="Menu"
+            >
+              <LuMenu aria-hidden />
+            </Button>
             <div className="min-w-0 flex-1">
               <p className="font-serif text-desc font-semibold italic text-[#FF7B29]">
                 Register
@@ -338,7 +410,7 @@ export default function PosPage() {
           />
 
           {visibleProducts.length ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            <div className={`mt-4 grid gap-3 ${GRID_COLS[billView]}`}>
               {visibleProducts.map((p) => (
                 <ProductCard
                   key={p.id}
@@ -374,17 +446,42 @@ export default function PosPage() {
         </div>
       </section>
 
-      {/* Bill panel: docked on large screens, bottom sheet on phones and tablets */}
-      <aside className="hidden w-[380px] shrink-0 border-l border-slate-200/80 bg-white lg:flex xl:w-[420px]">
-        <CartPanel
-          onCheckout={() => setShowPayment(true)}
-          onHold={() => holdCurrent().then(() => toast.info("Bill parked"))}
-          onDiscount={() => setShowDiscount(true)}
-        />
+      {/*
+       * Bill panel: docked on large screens, bottom sheet on phones and tablets.
+       * `overflow-hidden` keeps the contents from spilling while the width
+       * animates down to nothing.
+       */}
+      <aside
+        className={`hidden shrink-0 overflow-hidden border-slate-200/80 bg-white transition-[width] duration-200 motion-reduce:transition-none lg:flex ${BILL_WIDTH[billView]}`}
+        aria-hidden={billView === "hidden"}
+      >
+        {billView === "hidden" ? null : (
+          <CartPanel
+            view={billView}
+            onCollapse={() => setBillView("hidden")}
+            onToggleWidth={() =>
+              setBillView((v) => (v === "wide" ? "compact" : "wide"))
+            }
+            onCheckout={() => setShowPayment(true)}
+            onHold={() => holdCurrent().then(() => toast.info("Bill parked"))}
+            onDiscount={() => setShowDiscount(true)}
+          />
+        )}
       </aside>
 
+      {/*
+       * The running total, for the two cases where the panel is not on screen.
+       *
+       * On a phone it is the full-width bar that opens the sheet. It now sits
+       * on the bottom edge: the till hides the tab bar at every width, so the
+       * old 64px gutter would have left it floating above nothing.
+       *
+       * On a large screen with the bill collapsed it is a pill in the corner,
+       * and it is shown even with an empty bill — otherwise hiding the panel
+       * would leave no way to bring it back.
+       */}
       {lines.length ? (
-        <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-30 px-4 pb-3 md:bottom-0 md:px-6 md:pb-4 lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(12px+env(safe-area-inset-bottom))] md:px-6 md:pb-4 lg:hidden">
           <button
             type="button"
             onClick={() => setShowCart(true)}
@@ -400,6 +497,39 @@ export default function PosPage() {
             <span className="text-h2 font-extrabold text-[#FF7B29] tabular">
               {formatMoney(totalDue, currency)}
             </span>
+          </button>
+        </div>
+      ) : null}
+
+      {billView === "hidden" ? (
+        <div className="fixed bottom-5 right-5 z-30 hidden lg:block">
+          <button
+            type="button"
+            onClick={showBill}
+            aria-label={
+              lines.length
+                ? `Show the bill: ${itemCount} item${itemCount === 1 ? "" : "s"}`
+                : "Show the bill"
+            }
+            title="Show the bill (F3)"
+            className="flex h-14 items-center gap-3 rounded-full bg-[#111] pl-4 pr-5 text-white shadow-lift transition hover:bg-black"
+          >
+            <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand">
+              <LuShoppingBasket aria-hidden />
+              {itemCount ? (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-white px-1 text-[11px] font-bold text-gray-900 tabular">
+                  {itemCount > 99 ? "99+" : itemCount}
+                </span>
+              ) : null}
+            </span>
+            {lines.length ? (
+              <span className="text-h2 font-extrabold text-[#FF7B29] tabular">
+                {formatMoney(totalDue, currency)}
+              </span>
+            ) : (
+              <span className="font-semibold">Bill</span>
+            )}
+            <LuChevronRight className="text-white/50" aria-hidden />
           </button>
         </div>
       ) : null}

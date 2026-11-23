@@ -1,11 +1,6 @@
-import { useMemo } from "react";
-import { LuLayoutGrid } from "react-icons/lu";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LuChevronLeft, LuChevronRight, LuLayoutGrid } from "react-icons/lu";
 
-/*
- * One scrolling row of pills rather than a grid of icon tiles. The tiles cost ~100px of vertical
- * space at the top of the register — space that is worth about two more rows of products — and a
- * 56px circle is no easier to hit than a 44px pill that also shows its full name.
- */
 export function CategoryRail({
   categories,
   selected,
@@ -27,40 +22,136 @@ export function CategoryRail({
 
   const subs = selected !== "all" ? childrenOf.get(selected) || [] : [];
 
+  /*
+   * The row scrolls sideways, and `no-scrollbar` means there is no bar to say
+   * so. Without something, a shop with more categories than fit simply never
+   * sees the last few — the row looks like the whole list. These arrows appear
+   * only while there is somewhere to go, and the fades show which side.
+   */
+  const railRef = useRef(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  const measure = useCallback(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft < max - 4 });
+  }, []);
+
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return undefined;
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    // Categories arrive after the first paint, and the panel changes width.
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      ro.disconnect();
+    };
+  }, [measure, categories]);
+
+  // Keep the chosen category on screen, including when it was chosen elsewhere.
+  useEffect(() => {
+    railRef.current
+      ?.querySelector('[aria-pressed="true"]')
+      ?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [selected]);
+
+  const nudge = (by) =>
+    railRef.current?.scrollBy({ left: by, behavior: "smooth" });
+
+  const ARROW =
+    "absolute top-[26px] z-10 hidden h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white text-gray-700 shadow-md ring-1 ring-black/5 transition hover:text-[#FF7B29] lg:grid";
+
+  const Tile = ({ id, label, icon }) => {
+    const active = selected === id;
+    return (
+      <button
+        type="button"
+        onClick={() => onSelect(id)}
+        aria-pressed={active}
+        className="flex w-[72px] shrink-0 flex-col items-center gap-1.5 rounded-2xl py-1"
+      >
+        <span
+          className={`grid h-14 w-14 place-items-center rounded-full text-h1 transition ${
+            active
+              ? "bg-brand-50 ring-2 ring-brand ring-offset-2 ring-offset-[#F8F4EE]"
+              : "bg-white shadow-[0_8px_20px_-10px_rgba(0,0,0,0.2)] ring-1 ring-black/5 hover:ring-brand/40"
+          }`}
+          aria-hidden
+        >
+          {icon}
+        </span>
+        <span
+          className={`line-clamp-2 text-center text-desc leading-4 ${active ? "font-bold text-brand-700" : "text-slate-600"}`}
+        >
+          {label}
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div>
-      <div
-        className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
-        role="toolbar"
-        aria-label="Categories"
-      >
-        {[{ id: "all", name: "All items", icon: null }, ...tops].map((c) => {
-          const active = selected === c.id;
-          return (
+      <div className="relative">
+        {edges.left ? (
+          <>
+            <span
+              className="pointer-events-none absolute inset-y-0 left-0 z-[5] w-10 bg-gradient-to-r from-[#F8F4EE] to-transparent"
+              aria-hidden
+            />
             <button
-              key={c.id}
               type="button"
-              onClick={() => onSelect(c.id)}
-              aria-pressed={active}
-              className={`inline-flex h-tap shrink-0 items-center gap-2 rounded-xl border px-3.5 text-body font-bold transition ${
-                active
-                  ? "border-ink bg-ink text-white"
-                  : "border-surface-line bg-white text-ink-soft hover:border-brand hover:bg-brand-50/50"
-              }`}
+              onClick={() => nudge(-240)}
+              className={`${ARROW} left-0`}
+              aria-label="Scroll categories left"
             >
-              <span aria-hidden className="text-h2 leading-none">
-                {c.icon ||
-                  (c.id === "all" ? <LuLayoutGrid size={18} /> : c.name[0])}
-              </span>
-              {c.name}
+              <LuChevronLeft aria-hidden />
             </button>
-          );
-        })}
+          </>
+        ) : null}
+        {edges.right ? (
+          <>
+            <span
+              className="pointer-events-none absolute inset-y-0 right-0 z-[5] w-10 bg-gradient-to-l from-[#F8F4EE] to-transparent"
+              aria-hidden
+            />
+            <button
+              type="button"
+              onClick={() => nudge(240)}
+              className={`${ARROW} right-0`}
+              aria-label="Scroll categories right"
+            >
+              <LuChevronRight aria-hidden />
+            </button>
+          </>
+        ) : null}
+        <div
+          ref={railRef}
+          className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
+          role="toolbar"
+          aria-label="Categories"
+        >
+          <Tile
+            id="all"
+            label="All items"
+            icon={<LuLayoutGrid className="text-brand" size={22} />}
+          />
+          {tops.map((c) => (
+            <Tile
+              key={c.id}
+              id={c.id}
+              label={c.name}
+              icon={c.icon || c.name[0]}
+            />
+          ))}
+        </div>
       </div>
-
       {subs.length ? (
         <div
-          className="no-scrollbar -mx-4 mt-2 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
+          className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
           role="toolbar"
           aria-label="Sub-categories"
         >
@@ -72,13 +163,13 @@ export function CategoryRail({
                 type="button"
                 onClick={() => onSelectSub(s.id)}
                 aria-pressed={active}
-                className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-desc font-bold transition ${
+                className={`h-8 shrink-0 rounded-full px-3.5 text-desc font-medium transition ${
                   active
-                    ? "border-brand bg-brand text-ink"
-                    : "border-surface-line bg-white text-ink-muted hover:border-brand-300"
+                    ? "bg-brand text-white shadow-md shadow-brand/30"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-brand/40"
                 }`}
               >
-                {s.icon ? <span aria-hidden>{s.icon}</span> : null}
+                {s.icon ? `${s.icon} ` : ""}
                 {s.name}
               </button>
             );
