@@ -63,8 +63,13 @@ export function CategoryRail({
     railRef.current?.scrollBy({ left: by, behavior: "smooth" });
 
   const ARROW =
-    "absolute top-[26px] z-10 hidden h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white text-gray-700 shadow-md ring-1 ring-black/5 transition hover:text-[#FF7B29] lg:grid";
+    "absolute top-1/2 z-10 hidden h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-white text-gray-700 shadow-md ring-1 ring-black/5 transition hover:text-[#FF7B29] lg:grid";
 
+  /*
+   * A row of tabs rather than a shelf of 56px discs. The discs read as a feature of their own
+   * and cost 106px of a screen whose job is to show products; the same choice as a tab strip
+   * takes 38px and still names every category.
+   */
   const Tile = ({ id, label, icon }) => {
     const active = selected === id;
     return (
@@ -72,23 +77,16 @@ export function CategoryRail({
         type="button"
         onClick={() => onSelect(id)}
         aria-pressed={active}
-        className="flex w-[72px] shrink-0 flex-col items-center gap-1.5 rounded-2xl py-1"
+        className={`flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-desc transition ${
+          active
+            ? "bg-[#FF7B29] font-bold text-white shadow-sm"
+            : "bg-white font-medium text-slate-600 ring-1 ring-black/5 hover:text-[#FF7B29] hover:ring-brand/40"
+        }`}
       >
-        <span
-          className={`grid h-14 w-14 place-items-center rounded-full text-h1 transition ${
-            active
-              ? "bg-brand-50 ring-2 ring-brand ring-offset-2 ring-offset-[#F8F4EE]"
-              : "bg-white shadow-[0_8px_20px_-10px_rgba(0,0,0,0.2)] ring-1 ring-black/5 hover:ring-brand/40"
-          }`}
-          aria-hidden
-        >
+        <span className="text-[15px] leading-none" aria-hidden>
           {icon}
         </span>
-        <span
-          className={`line-clamp-2 text-center text-desc leading-4 ${active ? "font-bold text-brand-700" : "text-slate-600"}`}
-        >
-          {label}
-        </span>
+        {label}
       </button>
     );
   };
@@ -130,14 +128,19 @@ export function CategoryRail({
         ) : null}
         <div
           ref={railRef}
-          className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
+          className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
           role="toolbar"
           aria-label="Categories"
         >
           <Tile
             id="all"
             label="All items"
-            icon={<LuLayoutGrid className="text-brand" size={22} />}
+            icon={
+              <LuLayoutGrid
+                className={selected === "all" ? "text-white" : "text-brand"}
+                size={15}
+              />
+            }
           />
           {tops.map((c) => (
             <Tile
@@ -151,7 +154,7 @@ export function CategoryRail({
       </div>
       {subs.length ? (
         <div
-          className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
+          className="no-scrollbar -mx-4 mt-1.5 flex gap-1.5 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
           role="toolbar"
           aria-label="Sub-categories"
         >
@@ -163,9 +166,9 @@ export function CategoryRail({
                 type="button"
                 onClick={() => onSelectSub(s.id)}
                 aria-pressed={active}
-                className={`h-8 shrink-0 rounded-full px-3.5 text-desc font-medium transition ${
+                className={`h-7 shrink-0 rounded-full px-3 text-[12px] font-medium transition ${
                   active
-                    ? "bg-brand text-white shadow-md shadow-brand/30"
+                    ? "bg-brand-50 font-semibold text-brand-700 ring-1 ring-brand"
                     : "bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-brand/40"
                 }`}
               >

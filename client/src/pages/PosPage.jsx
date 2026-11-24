@@ -4,6 +4,7 @@ import {
   LuChevronRight,
   LuLayers,
   LuMenu,
+  LuPlus,
   LuScanBarcode,
   LuSearch,
   LuShoppingBasket,
@@ -68,12 +69,17 @@ const BILL_WIDTH = {
  * Reclaimed width becomes more products rather than wider ones. Written out in
  * full because Tailwind reads these class names from the source.
  */
+/*
+ * Two across on a phone, not three: at 390px a third column leaves about 124px per card and
+ * the price loses its unit to an ellipsis, which is the one thing on the tile a cashier has
+ * to be able to read. Everything from `sm` up has the room.
+ */
 const GRID_COLS = {
   hidden:
-    "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7",
+    "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-11",
   compact:
-    "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
-  wide: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+    "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10",
+  wide: "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9",
 };
 
 function beep(frequency = 1760) {
@@ -133,6 +139,15 @@ export default function PosPage() {
   const [showCart, setShowCart] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [billView, setBillView] = useState(readBillView);
+  /*
+   * The search box spent a whole row of the till being empty. It opens on the icon, on F2, and
+   * on its own whenever a query exists -- so a scan that lands in it, or a query kept across a
+   * re-render, cannot leave the box hidden with results showing and nothing explaining why.
+   *
+   * Collapsing it does not cost scanning: the wedge listener is on the window and deliberately
+   * steps aside while a field has focus, so a closed box is the case it was written for.
+   */
+  const [searchOpen, setSearchOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const searchRef = useRef(null);
   const debouncedQuery = useDebounce(query, 150);
@@ -149,6 +164,17 @@ export default function PosPage() {
       /* nothing to do: the choice just will not outlive this session */
     }
   }, [billView]);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    // The input is not in the tree until the state lands, so focus on the next frame.
+    requestAnimationFrame(() => searchRef.current?.focus());
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setQuery("");
+    setSearchOpen(false);
+  }, [setQuery]);
 
   const showBill = useCallback(
     () => setBillView((v) => (v === "hidden" ? "compact" : v)),
@@ -196,7 +222,7 @@ export default function PosPage() {
 
   useHotkeys(
     {
-      F2: () => searchRef.current?.focus(),
+      F2: openSearch,
       F3: toggleBill,
       F4: () =>
         lines.length && holdCurrent().then(() => toast.info("Bill parked")),
@@ -290,8 +316,8 @@ export default function PosPage() {
   return (
     <div className="flex h-full min-h-0">
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 border-b border-black/5 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-xl sm:px-6">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-20 border-b border-black/5 bg-white/90 px-4 py-2 backdrop-blur-xl sm:px-6">
+          <div className="flex h-10 items-center gap-2">
             {/* The rail and the tab bar are hidden on the till, so this is the way out. */}
             <Button
               variant="ghost"
@@ -302,18 +328,69 @@ export default function PosPage() {
             >
               <LuMenu aria-hidden />
             </Button>
-            <div className="min-w-0 flex-1">
-              <p className="font-serif text-desc font-semibold italic text-[#FF7B29]">
-                Register
-              </p>
-              <h1 className="truncate text-h1 font-extrabold tracking-tight text-gray-900">
+            {/*
+             * One line. The old header stacked a "Register" label, the shop name and the
+             * cashier's name over three lines, and the first two said the same thing twice.
+             */}
+            {searchOpen ? null : (
+              <h1 className="min-w-0 flex-1 truncate text-body font-extrabold tracking-tight text-gray-900">
                 {settings?.storeName || "Register"}
+                <span className="ml-2 font-normal text-desc text-slate-500">
+                  {user?.name}
+                  {source === "cache" ? " · offline catalog" : ""}
+                </span>
               </h1>
-              <p className="truncate text-desc text-slate-500">
-                {user?.name}
-                {source === "cache" ? " · offline catalog" : ""}
-              </p>
-            </div>
+            )}
+
+            {searchOpen ? (
+              <div className="relative min-w-0 flex-1">
+                <LuSearch
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  aria-hidden
+                />
+                <input
+                  ref={searchRef}
+                  className="field h-9 pl-9 pr-9"
+                  placeholder="Scan barcode or search products"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      closeSearch();
+                      return;
+                    }
+                    onSearchKeyDown(e);
+                  }}
+                  // Closing on the way out would hide results the cashier is still reading,
+                  // so an empty box closes and one with a query stays.
+                  onBlur={() => {
+                    if (!query) setSearchOpen(false);
+                  }}
+                  aria-label="Scan barcode or search products"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={closeSearch}
+                  className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100"
+                  aria-label="Close search"
+                >
+                  <LuX aria-hidden />
+                </button>
+              </div>
+            ) : (
+              <Button
+                variant="secondary"
+                size="iconSm"
+                onClick={openSearch}
+                aria-label="Search products"
+                title="Search or scan (F2)"
+              >
+                <LuSearch aria-hidden />
+              </Button>
+            )}
+
             <SyncPill onClick={openSync} />
             <Button
               variant="secondary"
@@ -341,41 +418,13 @@ export default function PosPage() {
             </Button>
           </div>
 
-          <div className="relative mt-3">
-            <LuSearch
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
-            <input
-              ref={searchRef}
-              className="field h-11 pl-10 pr-10"
-              placeholder="Scan barcode or search products"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onSearchKeyDown}
-              aria-label="Scan barcode or search products"
-              autoComplete="off"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100"
-                aria-label="Clear search"
-              >
-                <LuX aria-hidden />
-              </button>
-            ) : (
-              <LuScanBarcode
-                className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-300"
-                aria-hidden
-              />
-            )}
-          </div>
-
-          {quickKeys.length ? (
+          {/*
+           * Quick codes add to the bill, so they stay visually apart from the category tabs,
+           * which only filter. Hidden while searching, where the results are the shortcut.
+           */}
+          {quickKeys.length && !searchOpen ? (
             <div
-              className="no-scrollbar -mx-4 mt-2.5 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
+              className="no-scrollbar -mx-4 mt-1.5 flex gap-1.5 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
               aria-label="Quick codes"
             >
               {quickKeys.map((p) => (
@@ -383,11 +432,12 @@ export default function PosPage() {
                   key={p.id}
                   type="button"
                   onClick={() => select(p)}
-                  className="h-8 shrink-0 rounded-full bg-white px-3 text-desc font-medium text-slate-700 ring-1 ring-slate-200 transition hover:ring-brand/50"
+                  className="flex h-7 shrink-0 items-center gap-1 rounded-full bg-white px-2.5 text-[12px] font-medium text-slate-700 ring-1 ring-slate-200 transition hover:ring-brand/50"
                 >
+                  <LuPlus className="text-[#FF7B29]" size={11} aria-hidden />
                   <span className="font-semibold text-[#FF7B29] tabular">
                     #{p.code}
-                  </span>{" "}
+                  </span>
                   {p.name.split(" ").slice(0, 2).join(" ")}
                 </button>
               ))}
@@ -396,7 +446,7 @@ export default function PosPage() {
         </header>
 
         <div
-          className={`scroll-thin min-h-0 flex-1 overflow-y-auto px-4 pt-4 sm:px-6 ${lines.length ? "pb-24 lg:pb-4" : "pb-4"}`}
+          className={`scroll-thin min-h-0 flex-1 overflow-y-auto px-4 pt-2.5 sm:px-6 ${lines.length ? "pb-24 lg:pb-4" : "pb-4"}`}
         >
           <CategoryRail
             categories={categories}
@@ -410,7 +460,7 @@ export default function PosPage() {
           />
 
           {visibleProducts.length ? (
-            <div className={`mt-4 grid gap-3 ${GRID_COLS[billView]}`}>
+            <div className={`mt-2.5 grid gap-1.5 ${GRID_COLS[billView]}`}>
               {visibleProducts.map((p) => (
                 <ProductCard
                   key={p.id}
